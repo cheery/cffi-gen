@@ -1,0 +1,19 @@
+#!/usr/bin/env python
+from sys import argv
+from subprocess import check_output
+from tokenizer import tokenize
+import re
+
+path = argv[1]
+#proc = Popen(['gcc', '-E', argv[1]], stdout=PIPE)
+#print proc.stdout.read()
+headers = check_output(['gcc', '-E', path])
+tokens = list(tokenize(headers))
+
+macros = check_output(['gcc', '-dM', '-E', path])
+macroregex = re.compile(r"(\w+(\([^\)]*\))?)\W*(.*)")
+for line in [macro.strip() for macro in macros.split('#define')]:
+    if line == "":
+        continue
+    match = macroregex.match(line)
+    name, arglist, value = match.groups()
