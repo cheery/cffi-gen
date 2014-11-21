@@ -87,10 +87,13 @@ mode_types = {
 }
 
 rules = []
+labelled_rules = {}
 
-def rule(string):
+def rule(string, label=None):
     lhs, rhs = string.split(' = ')
     rule = Rule(lhs.strip(), [a for a in rhs.strip().split(' ') if len(a) > 0])
+    if label is not None:
+        labelled_rules[label] = rule
     def _impl_(func):
         rule.func = func
         return func
@@ -117,6 +120,8 @@ def on_blank(lineno):
 @rule('specifier_qualifier_list = specifier_qualifier')
 @rule('declaration_specifiers = declaration_specifier')
 @rule('type_qualifier_list = type_qualifier')
+@rule('attribute_specifier_list = attribute_specifier', label="declarator_attribute")
+@rule('attribute_list = attribute')
 def on_list(lineno, obj):
     return [obj]
 
@@ -126,6 +131,7 @@ def on_list(lineno, obj):
 @rule('specifier_qualifier_list = specifier_qualifier_list specifier_qualifier')
 @rule('declaration_specifiers = declaration_specifiers declaration_specifier')
 @rule('type_qualifier_list = type_qualifier_list type_qualifier')
+@rule('attribute_specifier_list = attribute_specifier_list attribute_specifier')
 def on_append(lineno, seq, obj):
     seq.append(obj)
     return seq
@@ -136,6 +142,7 @@ def on_append(lineno, seq, obj):
 @rule('parameter_list = parameter_list COMMA parameter_declaration')
 @rule('struct_declarator_list = struct_declarator_list COMMA struct_declarator')
 @rule('enumerator_list = enumerator_list COMMA enumerator')
+@rule('attribute_list = attribute_list COMMA attribute')
 def on_separator_append(lineno, seq, sep, obj):
     seq.append(obj)
     return seq
@@ -150,21 +157,28 @@ def on_passthrough(lineno, obj):
 def on_declaration(lineno, specifiers, declarators, *sm):
     if 'typedef' in specifiers:
         for declarator in declarators:
-            name = declarator[0][1]
-            if isinstance(name, str):
-                type_space[name] = specifiers
+            assert isinstance(declarator, Declarator)
+            type_space[declarator.name] = declarator
     return specifiers, declarators
 
 @rule('function_definition = declaration_specifiers declarator declaration_list compound_statement')
+@rule('function_definition = declaration_specifiers declarator attribute_specifier_list compound_statement')
 @rule('function_definition = declaration_specifiers declarator compound_statement')
 @rule('function_definition = declarator declaration_list compound_statement')
+@rule('function_definition = declarator attribute_specifier_list compound_statement')
 @rule('function_definition = declarator compound_statement')
 def on_function_definition(lineno, *stuff):
     return stuff
 
+class Declarator(object):
+    def __init__(self, name):
+        self.name = name
+        self.initializer = None
+        self.attributes = None
+
 @rule('direct_declarator = IDENTIFIER')
 def on_direct_declarator_simple(lineno, declarator):
-    return declarator
+    return Declarator(declarator)
 
 @rule('direct_declarator = LEFT_PAREN declarator RIGHT_PAREN')
 def on_pointer_declarator_simple(lineno, lp, declarator, rp):
@@ -225,17 +239,28 @@ def on_specifier_qualifier(lineno, specifier):
 #def on_declaration_specifiers(lineno, specifier, rest=()):
 #    return [specifier] + list(rest)
 
-#@rule('attribute_specifier = __ATTRIBUTE__ LEFT_PAREN LEFT_PAREN attribute_list RIGHT_PAREN RIGHT_PAREN')
-#def on_attribute_specifier(lineno, at, lp1, lp2, attributes, rp1, rp2):
-#    return ('attribute', attributes)
-#
-#@rule('attribute = STRING')
-#@rule('attribute = IDENTIFIER')
-#@rule('attribute = IDENTIFIER LEFT_PAREN attribute_list RIGHT_PAREN')
-#def on_attribute(lineno, *stuff):
-#    return stuff
+#@rule('attribute_specifier = LOL')
+#def on_attribute_specifier(lineno, at):
+#    return None
+
+@rule('attribute_specifier = __ASM__ LEFT_PAREN attribute_list RIGHT_PAREN')
+def on_attribute_specifier(lineno, at, lp1, attributes, rp2):
+    return ('asm', attributes)
+
+@rule('attribute_specifier = __ATTRIBUTE__ LEFT_PAREN LEFT_PAREN attribute_list RIGHT_PAREN RIGHT_PAREN')
+def on_attribute_specifier(lineno, at, lp1, lp2, attributes, rp1, rp2):
+    return ('attribute', attributes)
+
+@rule('attribute = STRING')
+@rule('attribute = STRING STRING')
+@rule('attribute = IDENTIFIER')
+@rule('attribute = INTCONSTANT')
+@rule('attribute = IDENTIFIER LEFT_PAREN attribute_list RIGHT_PAREN')
+def on_attribute(lineno, *stuff):
+    return stuff
 
 #@rule('storage_class_specifier = attribute_specifier')
+@rule('storage_class_specifier = attribute_specifier', label="storage_attribute")
 @rule('storage_class_specifier = TYPEDEF')
 @rule('storage_class_specifier = EXTERN')
 @rule('storage_class_specifier = STATIC')
@@ -268,23 +293,31 @@ def on_type_specifier(lineno, specifier):
 def on_type_qualifier(lineno, qualifier):
     return qualifier
 
+@rule('init_declarator = declarator attribute_specifier_list')
 @rule('init_declarator = declarator')
-def on_init_declarator(lineno, declarator):
-    return (declarator, None)
+def on_init_declarator(lineno, declarator, attributes=()):
+    declarator.attributes = attributes
+    return declarator
 
 @rule('init_declarator = declarator EQUAL initializer')
-def on_init_declarator_init(lineno, declarator, initializer):
+def on_init_declarator_init(lineno, declarator, eq, initializer):
+    declarator.initializer = initializer
     return (declarator, initializer)
+
+# test verified attribute is not a declarator
+#@rule('declarator = pointer direct_declarator LOL')
+#@rule('declarator = direct_declarator LOL')
+#def on_declarator_attribute(lineno, pointer, declarator):
+#    return [pointer, declarator]
 
 @rule('declarator = pointer direct_declarator')
 def on_declarator_pointer(lineno, pointer, declarator):
-    if declarator in ('__compar_fn_t', 'SDL_EventFilter', 'SDL_HintCallback', 'SDL_LogOutputFunction', 'SDL_TimerCallback', 'SDL_AssertionHandler', 'SDL_ThreadFunction', 'SDL_AudioCallback', 'SDL_AudioFilter'):
-        return declarator
-    return [pointer, declarator]
+    # mark the pointer somehow
+    return declarator
 
 @rule('declarator = direct_declarator')
 def on_declarator(lineno, declarator):
-    return [None, declarator]
+    return declarator
 
 @rule('initializer = assignment_expression')
 def on_initializer_assignment_expression(lineno, expr):
@@ -667,95 +700,18 @@ def on_type_expression(lineno, *rest):
 #@rule('type-integer = type-combination')
 #def on_int_default(lineno, prim):
 #    return prim_space[prim]
-#
-#@rule('type-combination = type-combination UNSIGNED INT')
-#@rule('type-combination = type-combination INT')
-#@rule('type-combination = type-combination LONG')
-#@rule('type-combination = CHAR')
-#@rule('type-combination = SHORT')
-#@rule('type-combination = INT')
-#@rule('type-combination = LONG')
-#def on_type_combination(lineno, *typidity):
-#    return ' '.join(typidity)
-#
-##    rule('declaration', 'EXTERN'),
-##    rule('declaration', 'CONST'),
-##    rule('declaration',
-##        '__ATTRIBUTE__', 'LEFT_PAREN', 'LEFT_PAREN',
-##            'IDENTIFIER', 'LEFT_PAREN', 'STRING', 'RIGHT_PAREN',
-##            'RIGHT_PAREN', 'RIGHT_PAREN'),
-##]
-#
-#@rule('attribute-clauses = ')
-#@rule('attribute-clauses = attribute-clauses attribute-clause')
-#@rule('attribute-clause = __ASM__ LEFT_PAREN attribute-expression RIGHT_PAREN')
-#@rule('attribute-clause = __ATTRIBUTE__ LEFT_PAREN LEFT_PAREN attribute-expression RIGHT_PAREN RIGHT_PAREN')
-#@rule('attribute-expression = *')
-#@rule('attribute-expression = attribute-expression *')
-#@rule('attribute-expression = attribute-expression COMMA *')
-#@rule('attribute-expression = * LEFT_PAREN attribute-expression RIGHT_PAREN')
-#def on_crapptribute(lineno, *_):
-#    return None
-#
-#@rule('const-expression = const-comparison QUESTION const-comparison COLON const-comparison')
-#def on_const_comparison(lineno, cond, q, tru, c, fal):
-#    return [tru, fal][cond]
-#
-#@rule('const-expression = const-comparison')
-#@rule('const-comparison = const-shift')
-#@rule('const-shift = const-plusminus')
-#@rule('const-plusminus = const-divmul')
-#@rule('const-divmul = const-term')
-#def on_const_expression(lineno, value):
-#    return value
-#
-#@rule('const-comparison = const-comparison LEFT_ANGLE const-shift')
-#@rule('const-comparison = const-comparison RIGHT_ANGLE const-shift')
-#@rule('const-comparison = const-comparison EQ_OP const-shift')
-#@rule('const-shift = const-shift LEFT_OP const-plusminus')
-#@rule('const-shift = const-shift RIGHT_OP const-plusminus')
-#@rule('const-plusminus = const-plusminus PLUS const-divmul')
-#@rule('const-plusminus = const-plusminus DASH const-divmul')
-#@rule('const-divmul = const-divmul SLASH const-term')
-#@rule('const-divmul = const-divmul STAR const-term')
-#def on_const_binop(lineno, lhs, op, rhs):
-#    value = {
-#        '==':operator.eq,
-#        '<<':operator.lshift,
-#        '>>':operator.rshift,
-#        '<':operator.lt,
-#        '>':operator.gt,
-#        '/':operator.div,
-#        '*':operator.mul,
-#        '-':operator.sub,
-#        '+':operator.add,
-#    }[op](lhs, rhs)
-#    return value
-#
-#@rule('const-term = DASH const-term')
-#def on_minus_prefix(lineno, dash, value):
-#    return -value
-#
-#@rule('const-term = LEFT_PAREN const-expression RIGHT_PAREN')
-#def on_int_constant(lineno, lp, value, rp):
-#    return value
-#
-#@rule('const-term = SIZEOF LEFT_PAREN type-sign RIGHT_PAREN')
-#def on_sizeof_term(lineno, sz, lp, typesign, rp):
-#    if isinstance(typesign, Pointer):
-#        return prim_space['pointer'].size
-#    assert typesign is not None, "%i: null type" % lineno
-#    return typesign.size
-#
-#@rule('const-term = LEFT_PAREN type-sign RIGHT_PAREN const-term')
-#def on_sizeof_term(lineno, lp, typesign, rp, ct):
-#    return ct
-#
-#@rule('const-term = INTCONSTANT')
-#def on_int_constant(lineno, value):
-#    return int(value)
 
 result = canonical.simulate(rules, 'translation_unit')
+
+attribute_conflict = set([labelled_rules['storage_attribute'], labelled_rules['declarator_attribute']])
+
+remaining_conflicts = []
+for row, name, group in result.conflicts:
+    if group == attribute_conflict:
+        result.table[row][name] = labelled_rules['declarator_attribute']
+        continue
+    remaining_conflicts.append((row, name, group))
+result.conflicts = remaining_conflicts
 assert len(result.conflicts) == 0, lrkit.diagnose(result)
 print 'parsing'
 table = result.table
@@ -788,31 +744,6 @@ def step(lineno, group, value):
         data.append(value)
         state = action
 
-def require_token(token_group):
-    global lineno, group, value
-    assert group == token_group, "%i: got %s, expected %s in __attribute__" % (lineno, group, token_group)
-    lineno, group, value = token_stream.next()
-
-def parse_idiotic_gcc_attribute():
-    global lineno, group, value
-    base = (group, value)
-    lineno, group, value = token_stream.next()
-    while group == 'LEFT_PAREN':
-        require_token('LEFT_PAREN')
-        base = base, parse_idiotic_gcc_attributes()
-        require_token('RIGHT_PAREN')
-    return base
-
-def parse_idiotic_gcc_attributes():
-    global lineno, group, value
-    attributes = []
-    attributes.append(parse_idiotic_gcc_attribute())
-    while group != 'RIGHT_PAREN':
-        if group == 'COMMA':
-            require_token('COMMA')
-        attributes.append(parse_idiotic_gcc_attribute())
-    return attributes
-
 attributes = []
 path = argv[1]
 #proc = Popen(['gcc', '-E', argv[1]], stdout=PIPE)
@@ -820,28 +751,13 @@ path = argv[1]
 headers = check_output(['gcc', '-E', path])
 token_stream = tokenize(headers)
 for lineno, group, value in token_stream:
-    while group in ('__ATTRIBUTE__', '__ASM__'):
-        if group == '__ASM__':
-            require_token('__ASM__')
-            if value == '__volatile__':
-                lineno, group, value = token_stream.next()
-            require_token('LEFT_PAREN')
-            parse_idiotic_gcc_attributes()
-            require_token('RIGHT_PAREN')
-        else:
-            require_token('__ATTRIBUTE__')
-            require_token('LEFT_PAREN')
-            require_token('LEFT_PAREN')
-            attributes.append(parse_idiotic_gcc_attributes())
-            require_token('RIGHT_PAREN')
-            require_token('RIGHT_PAREN')
     if group == 'MACRO':
         continue
     if group == 'IDENTIFIER' and value in type_space:
         group = 'TYPE_NAME'
     step(lineno, group, value)
 result = step(lineno, None, None)
-print result
+print "success"
 
 macros = check_output(['gcc', '-dM', '-E', path])
 macroregex = re.compile(r"(\w+(\([^\)]*\))?)\W*(.*)")
