@@ -1,4 +1,7 @@
-keywords = set()
+keywords = set(
+    "typedef char int short long unsigned signed struct static __inline inline "
+    "__restrict __extension__ union volatile enum __asm__ double float "
+    "sizeof extern __attribute__ const void".split(" "))
 reserved = set()
 
 class Stream(object):
@@ -60,7 +63,7 @@ def token(stream):
             if stream.character == "\\":
                 string += stream.adv()
             string += stream.adv()
-        return lineno, 'macro', string
+        return lineno, 'MACRO', string
     if isnondigit(stream.character):
         string = stream.adv()
         while isnondigit(stream.character) or isdigit(stream.character):
@@ -82,7 +85,7 @@ def token(stream):
             return lineno, 'INTCONSTANT', string
         while isoctal(stream.character):
             string += stream.adv()
-        return start, stream.index, 'INTCONSTANT', string
+        return lineno, 'INTCONSTANT', string
     if isdigit(stream.character):
         string = stream.adv()
         while isdigit(stream.character):
