@@ -43,48 +43,45 @@ class Union(object):
     def __init__(self, fields):
         self.fields = fields
 
-prim_space = {
-    'pointer': Signed(8),
-    'enum': Signed(4),
-    'char': Unsigned(1),
-    'short': Signed(2),
-    'short int': Signed(2),
-    'int': Signed(4),
-    'long': Signed(8),
-    'long int': Signed(8),
-    'long unsigned int': Unsigned(8),
-    'long long int': Signed(8),
-    'float': Float(4),
-    'double': Float(8),
-    'long double': Float(16),
-}
+def reset_env():
+    global prim_space, enum_space, union_space, struct_space, type_space, name_space, mode_types
+    prim_space = {
+        'pointer': Signed(8),
+        'enum': Signed(4),
+        'char': Unsigned(1),
+        'short': Signed(2),
+        'short int': Signed(2),
+        'int': Signed(4),
+        'long': Signed(8),
+        'long int': Signed(8),
+        'long unsigned int': Unsigned(8),
+        'long long int': Signed(8),
+        'float': Float(4),
+        'double': Float(8),
+        'long double': Float(16),
+    }
 
-enum_space = {}
-union_space = {}
-struct_space = {
-    '__locale_data': Structure(None),
-}
+    enum_space = {}
+    union_space = {}
+    struct_space = {
+        '__locale_data': Structure(None),
+    }
 
-type_space = {
-    '__builtin_va_list': Pointer(Structure(None)),
-    'void': None,
-#    'unsigned char': 'u8',
-#    'unsigned short int': 'u16',
-#    'unsigned int': 'u32',
-#    'unsigned long int': 'u64',
-#    'char': 'u8',
-}
+    type_space = {
+        '__builtin_va_list': Pointer(Structure(None)),
+        'void': None,
+    }
 
-name_space = {
-}
+    name_space = {
+    }
 
-mode_types = {
-        '__QI__': Signed(1),
-        '__HI__': Signed(2),
-        '__SI__': Signed(4),
-        '__DI__': Signed(8),
-        '__word__': Signed(4),
-}
+    mode_types = {
+            '__QI__': Signed(1),
+            '__HI__': Signed(2),
+            '__SI__': Signed(4),
+            '__DI__': Signed(8),
+            '__word__': Signed(4),
+    }
 
 rules = []
 labelled_rules = {}
@@ -201,9 +198,22 @@ def on_parameter_type_list(lineno, parameters, *ellipsis):
 @rule('parameter_declaration = declaration_specifiers declarator')
 @rule('parameter_declaration = declaration_specifiers abstract_declarator')
 @rule('parameter_declaration = declaration_specifiers')
-@rule('parameter_declaration = declaration_specifiers pointer')
 def on_parameter_declaration(lineno, specifiers, parameter=None):
     return specifiers, parameter
+
+@rule('abstract_declarator = pointer')
+@rule('abstract_declarator = direct_abstract_declarator')
+@rule('abstract_declarator = pointer direct_abstract_declarator')
+@rule('direct_abstract_declarator = LEFT_PAREN abstract_declarator RIGHT_PAREN')
+@rule('direct_abstract_declarator = LEFT_BRACKET RIGHT_BRACKET')
+@rule('direct_abstract_declarator = LEFT_BRACKET constant_expression RIGHT_BRACKET')
+@rule('direct_abstract_declarator = direct_abstract_declarator LEFT_BRACKET RIGHT_BRACKET')
+@rule('direct_abstract_declarator = direct_abstract_declarator LEFT_BRACKET constant_expression RIGHT_BRACKET')
+@rule('direct_abstract_declarator = direct_abstract_declarator LEFT_PAREN RIGHT_PAREN')
+@rule('direct_abstract_declarator = direct_abstract_declarator LEFT_PAREN parameter_type_list RIGHT_PAREN')
+def on_abstract_declarator(lineno, *stuff):
+    return stuff
+
 
 @rule('declaration_specifier = storage_class_specifier')
 @rule('declaration_specifier = type_specifier')
@@ -268,6 +278,8 @@ def on_attribute(lineno, *stuff):
 @rule('storage_class_specifier = REGISTER')
 @rule('storage_class_specifier = INLINE')
 @rule('storage_class_specifier = __INLINE')
+@rule('storage_class_specifier = __INLINE__')
+@rule('storage_class_specifier = __THREAD')
 def on_storage_class_specifier(lineno, specifier):
     return specifier
 
@@ -430,6 +442,10 @@ def on_minus_prefix(lineno, value):
 def on_minus_prefix(lineno, value):
     return ord(value[1])
 
+@rule('constant_term = PLUS constant_term')
+def on_plus_prefix(lineno, dash, value):
+    return +value
+
 @rule('constant_term = DASH constant_term')
 def on_minus_prefix(lineno, dash, value):
     return -value
@@ -452,6 +468,8 @@ def on_sizeof_term(lineno, lp, typesign, rp, ct):
 
 @rule('constant_term = INTCONSTANT')
 def on_constant_expression_int(lineno, const):
+    if const.lower().endswith('u'):
+        const = const.lower().rstrip('u')
     if const.startswith('0x') or const.startswith('0X'):
         return int(const, 16)
     return int(const)
@@ -715,12 +733,11 @@ result.conflicts = remaining_conflicts
 assert len(result.conflicts) == 0, lrkit.diagnose(result)
 print 'parsing'
 table = result.table
-state = 0
-stack = []
-data  = []
 
 def step(lineno, group, value):
     global state
+    if group == 'IDENTIFIER' and value in type_space:
+        group = 'TYPE_NAME'
     action = table[state].get(group, table[state].get('*'))
     while isinstance(action, Rule):
         values = []
@@ -731,10 +748,12 @@ def step(lineno, group, value):
         stack.append(state)
         data.append(action.func(lineno, *values))
         state = table[state][action.lhs]
+
+        if group == 'IDENTIFIER' and value in type_space:
+            group = 'TYPE_NAME'
         action = table[state].get(group, table[state].get('*'))
     if action is None:
-        print "%i: got %s, but expected %s: %s" % (lineno, group, ', '.join(map(str, table[state])), value)
-        exit(1)
+        raise Exception("%i: got %s, but expected %s: %s" % (lineno, group, ', '.join(map(str, table[state])), value))
     if isinstance(action, Accept):
         state  = stack.pop(-1)
         result = data.pop(-1)
@@ -745,24 +764,34 @@ def step(lineno, group, value):
         state = action
 
 attributes = []
-path = argv[1]
 #proc = Popen(['gcc', '-E', argv[1]], stdout=PIPE)
 #print proc.stdout.read()
-headers = check_output(['gcc', '-E', path])
-token_stream = tokenize(headers)
-for lineno, group, value in token_stream:
-    if group == 'MACRO':
-        continue
-    if group == 'IDENTIFIER' and value in type_space:
-        group = 'TYPE_NAME'
-    step(lineno, group, value)
-result = step(lineno, None, None)
-print "success"
 
-macros = check_output(['gcc', '-dM', '-E', path])
-macroregex = re.compile(r"(\w+(\([^\)]*\))?)\W*(.*)")
-for line in [macro.strip() for macro in macros.split('#define')]:
-    if line == "":
-        continue
-    match = macroregex.match(line)
-    name, arglist, value = match.groups()
+logs = open('logfile', 'a')
+for path in argv[1:]:
+    try:
+        reset_env()
+        state = 0
+        stack = []
+        data  = []
+        headers = check_output(['gcc', '-E', path])
+        token_stream = tokenize(headers)
+        for lineno, group, value in token_stream:
+            if group == 'MACRO':
+                continue
+            step(lineno, group, value)
+        result = step(lineno, None, None)
+    except Exception, error:
+        print error
+        logs.write("%s:%s\n" % (path, error))
+    else:
+        print "success", path
+logs.close()
+
+#macros = check_output(['gcc', '-dM', '-E', path])
+#macroregex = re.compile(r"(\w+(\([^\)]*\))?)\W*(.*)")
+#for line in [macro.strip() for macro in macros.split('#define')]:
+#    if line == "":
+#        continue
+#    match = macroregex.match(line)
+#    name, arglist, value = match.groups()

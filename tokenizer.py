@@ -1,7 +1,7 @@
 keywords = set(
-    "typedef char int short long unsigned signed struct static __inline inline "
+    "typedef char int short long unsigned signed struct static __inline inline __inline__ "
     "__restrict __extension__ union volatile enum __asm__ double float "
-    "sizeof extern __attribute__ const void".split(" "))
+    "sizeof extern __attribute__ const void __thread".split(" "))
 reserved = set()
 
 class Stream(object):
@@ -82,8 +82,12 @@ def token(stream):
             string += stream.adv()
             while ishex(stream.character):
                 string += stream.adv()
+            while stream.character.isalpha():
+                string += stream.adv()
             return lineno, 'INTCONSTANT', string
         while isoctal(stream.character):
+            string += stream.adv()
+        while stream.character.isalpha():
             string += stream.adv()
         return lineno, 'INTCONSTANT', string
     if isdigit(stream.character):
@@ -106,6 +110,8 @@ def token(stream):
             string += stream.adv()
             while isdigit(stream.character):
                 string += stream.adv()
+        while stream.character.isalpha():
+            string += stream.adv()
         return lineno, name, string
     if stream.character_tri in operators:
         string = stream.adv() + stream.adv() + stream.adv()
