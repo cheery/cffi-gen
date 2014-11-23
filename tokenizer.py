@@ -1,7 +1,7 @@
 keywords = set(
     "typedef char int short long unsigned signed struct static __inline inline __inline__ "
-    "__restrict __extension__ union volatile enum __asm__ double float "
-    "sizeof extern __attribute__ const void __thread".split(" "))
+    "__restrict __extension__ __signed__ union volatile enum __asm__ double float "
+    "sizeof extern __attribute__ const void __thread __restrict__".split(" "))
 reserved = set()
 
 class Stream(object):
