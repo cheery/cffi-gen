@@ -78,7 +78,7 @@ def token(stream):
         return lineno, name, string
     if stream.character == '0' and stream.character_pair != '0.':
         string = stream.adv()
-        if stream.character in 'xX':
+        if stream.character in ('x', 'X'):
             string += stream.adv()
             while ishex(stream.character):
                 string += stream.adv()
@@ -100,13 +100,13 @@ def token(stream):
             string += stream.adv()
             while isdigit(stream.character):
                 string += stream.adv()
-        if stream.character in 'eE':
+        if stream.character in ('e', 'E'):
             name = 'FLOATCONSTANT'
             string += stream.adv()
-            if stream.character in '-+':
+            if stream.character in ('-', '+'):
                 string += stream.adv()
             if not isdigit(stream.character):
-                raise Exception("expected digit")
+                raise Exception("expected digit %r" % string)
             string += stream.adv()
             while isdigit(stream.character):
                 string += stream.adv()
