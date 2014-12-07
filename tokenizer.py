@@ -74,7 +74,7 @@ def token(stream):
         elif string in reserved:
             name = 'RESERVED'
         elif string in ('true', 'false'):
-            nmae = 'BOOLCONSTANT'
+            name = 'BOOLCONSTANT'
         return lineno, name, string
     if stream.character == '0' and stream.character_pair != '0.':
         string = stream.adv()
@@ -84,23 +84,26 @@ def token(stream):
                 string += stream.adv()
             while stream.character.isalpha():
                 string += stream.adv()
-            return lineno, 'INTCONSTANT', string
+            return lineno, 'INTCONSTANT', int(string, 16)
         while isoctal(stream.character):
             string += stream.adv()
         while stream.character.isalpha():
-            string += stream.adv()
-        return lineno, 'INTCONSTANT', string
+            stream.adv()
+        return lineno, 'INTCONSTANT', int(string, 8)
     if isdigit(stream.character):
         string = stream.adv()
         while isdigit(stream.character):
             string += stream.adv()
+        cons = int
         name = 'INTCONSTANT'
         if stream.character == '.':
+            cons = float
             name = 'FLOATCONSTANT'
             string += stream.adv()
             while isdigit(stream.character):
                 string += stream.adv()
         if stream.character in ('e', 'E'):
+            cons = float
             name = 'FLOATCONSTANT'
             string += stream.adv()
             if stream.character in ('-', '+'):
@@ -111,8 +114,8 @@ def token(stream):
             while isdigit(stream.character):
                 string += stream.adv()
         while stream.character.isalpha():
-            string += stream.adv()
-        return lineno, name, string
+            stream.adv()
+        return lineno, name, cons(string)
     if stream.character_tri in operators:
         string = stream.adv() + stream.adv() + stream.adv()
         return lineno, operators[string], string
@@ -123,23 +126,45 @@ def token(stream):
         string = stream.adv()
         return lineno, operators[string], string
     if stream.character == "'":
-        string = stream.adv()
+        stream.adv()
+        string = ''
         if stream.character == "\\":
+            string += parse_escape_sequence(stream)
+        else:
             string += stream.adv()
-        string += stream.adv()
         while stream.character != "'":
             string += stream.adv()
-        string += stream.adv()
+        stream.adv()
         return lineno, "CHARACTER", string
     if stream.character == '"':
-        string = stream.adv()
+        stream.adv()
+        string = ''
         while stream.character != '"':
             if stream.character == "\\":
+                string += parse_escape_sequence(stream)
+            else:
                 string += stream.adv()
-            string += stream.adv()
-        string += stream.adv()
+        stream.adv()
         return lineno, "STRING", string
     raise Exception("invalid character %c" % stream.character)
+
+def parse_escape_sequence(stream):
+    assert stream.adv() == "\\"
+    character = stream.adv()
+    if character in escape_sequences:
+        return escape_sequences[character]
+    if isdigit(character):
+        for k in range(2):
+            if isdigit(stream.character):
+                character += stream.adv()
+        return chr(int(character, 8))
+    if character == 'x':
+        num = ''
+        for k in range(2):
+            if ishex(stream.character):
+                num += stream.adv()
+        return chr(int(num, 16))
+    raise Exception("invalid escape sequence %c" % character)
 
 # operator precedence table on page 40
 operators = {
@@ -188,6 +213,20 @@ operators = {
     "&=":'AND_ASSIGN',
     "^=":'XOR_ASSIGN',
     "|=":'OR_ASSIGN',
+}
+
+escape_sequences = {
+        'a': chr(0x07),
+        'b': chr(0x08),
+        'f': chr(0x0C),
+        'n': chr(0x0A),
+        'r': chr(0x0D),
+        't': chr(0x09),
+        'v': chr(0x0B),
+        '\\': chr(0x5C),
+        '\'': chr(0x27),
+        '\"': chr(0x22),
+        '?': chr(0x22),
 }
 
 def isnondigit(ch):

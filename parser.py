@@ -13,6 +13,8 @@ class Environment(object):
         self.types = {'void': None}
         self.constants = {}
         self.names = {}
+        self.hard_to_parse_macros = {}
+        self.unparsed_parametric_macros = {}
 
 class Specifier(object):
     def __init__(self):
@@ -407,31 +409,30 @@ def on_const_expression(lineno, env, value):
 @rule('constant_divmul = constant_divmul SLASH constant_term')
 @rule('constant_divmul = constant_divmul STAR constant_term')
 def on_const_binop(lineno, env, lhs, op, rhs):
-    value = {
-        '|':operator.or_,
-        '==':operator.eq,
-        '<<':operator.lshift,
-        '>>':operator.rshift,
-        '<':operator.lt,
-        '>':operator.gt,
-        '/':operator.div,
-        '*':operator.mul,
-        '-':operator.sub,
-        '+':operator.add,
-    }[op](lhs, rhs)
+    value = operator_table[op](lhs, rhs)
     return value
+
+operator_table = {
+    '|':operator.or_,
+    '==':operator.eq,
+    '<<':operator.lshift,
+    '>>':operator.rshift,
+    '<':operator.lt,
+    '>':operator.gt,
+    '/':operator.div,
+    '*':operator.mul,
+    '-':operator.sub,
+    '+':operator.add,
+}
 
 @rule('constant_term = IDENTIFIER')
 def on_minus_prefix(lineno, env, value):
+    # BAD: incorrect, fix
     return 0
-
-@rule('constant_term = STRING')
-def on_minus_prefix(lineno, env, value):
-    return value 
 
 @rule('constant_term = CHARACTER')
 def on_minus_prefix(lineno, env, value):
-    return ord(value[1])
+    return ord(value)
 
 @rule('constant_term = PLUS constant_term')
 def on_plus_prefix(lineno, env, dash, value):
@@ -447,28 +448,31 @@ def on_int_constant(lineno, env, lp, value, rp):
 
 @rule('constant_term = SIZEOF LEFT_PAREN type_expression RIGHT_PAREN')
 def on_sizeof_term(lineno, env, sz, lp, typesign, rp):
+    # BAD: incorrect, fix.
     return 8
-#    if isinstance(typesign, Pointer):
-#        return prim_space['pointer'].size
-#    assert typesign is not None, "%i: null type" % lineno, env
-#    return typesign.size
-#
+
 @rule('constant_term = LEFT_PAREN type_expression RIGHT_PAREN constant_term')
 def on_sizeof_term(lineno, env, lp, typesign, rp, ct):
     return ct
 
+@rule('constant_term = STRING')
 @rule('constant_term = INTCONSTANT')
+@rule('constant_term = FLOATCONSTANT')
 def on_constant_expression_int(lineno, env, const):
-    if const.lower().endswith('u'):
-        const = const.lower().rstrip('u')
-    if const.startswith('0x') or const.startswith('0X'):
-        return int(const, 16)
-    return int(const)
+    return const
 
 @rule('type_expression = specifier_qualifier_list')
 @rule('type_expression = specifier_qualifier_list pointer')
 def on_type_expression(lineno, env, *rest):
     return rest
+
+@rule('macro_expression = ')
+def on_blank_macro_expression(lineno, env):
+    return None
+
+@rule('macro_expression = constant_expression')
+def on_macro_expression(lineno, env, const):
+    return const
 
 ## must still parse __mode__
 ##@rule('by-the-way = TYPEDEF type-prefixes type-sign IDENTIFIER __ATTRIBUTE__ LEFT_PAREN LEFT_PAREN __MODE__ LEFT_PAREN IDENTIFIER RIGHT_PAREN RIGHT_PAREN RIGHT_PAREN SEMICOLON')
@@ -666,24 +670,30 @@ def on_type_expression(lineno, env, *rest):
 #def on_int_default(lineno, prim):
 #    return prim_space[prim]
 
-result = canonical.simulate(rules, 'translation_unit')
+translation_unit = canonical.simulate(rules, 'translation_unit')
 
 attribute_conflict = set([labelled_rules['storage_attribute'], labelled_rules['declarator_attribute']])
 
 remaining_conflicts = []
-for row, name, group in result.conflicts:
+for row, name, group in translation_unit.conflicts:
     if group == attribute_conflict:
-        result.table[row][name] = labelled_rules['declarator_attribute']
+        translation_unit.table[row][name] = labelled_rules['declarator_attribute']
         continue
     remaining_conflicts.append((row, name, group))
-result.conflicts = remaining_conflicts
-assert len(result.conflicts) == 0, lrkit.diagnose(result)
-print 'parsing'
-table = result.table
+translation_unit.conflicts = remaining_conflicts
+assert len(translation_unit.conflicts) == 0, lrkit.diagnose(translation_unit)
 
+macro_expression = canonical.simulate(rules, 'macro_expression')
+assert len(macro_expression.conflicts) == 0, lrkit.diagnose(translation_unit)
+print 'parsing'
+
+class SnError(Exception):
+    def __init__(self, message):
+        Exception.__init__(self, message)
 
 class Parser(object):
-    def __init__(self, env):
+    def __init__(self, table, env):
+        self.table = table
         self.state = 0
         self.stack = []
         self.data  = []
@@ -692,7 +702,7 @@ class Parser(object):
     def step(self, lineno, group, value):
         if group == 'IDENTIFIER' and value in self.env.types:
             group = 'TYPE_NAME'
-        action = table[self.state].get(group, table[self.state].get('*'))
+        action = self.table[self.state].get(group, self.table[self.state].get('*'))
         while isinstance(action, Rule):
             values = []
             for i in range(len(action)):
@@ -701,13 +711,13 @@ class Parser(object):
             values.reverse()
             self.stack.append(self.state)
             self.data.append(action.func(lineno, self.env, *values))
-            self.state = table[self.state][action.lhs]
+            self.state = self.table[self.state][action.lhs]
 
             if group == 'IDENTIFIER' and value in self.env.types:
                 group = 'TYPE_NAME'
-            action = table[self.state].get(group, table[self.state].get('*'))
+            action = self.table[self.state].get(group, self.table[self.state].get('*'))
         if action is None:
-            error = "%i: got %s, but expected %s: %s" % (lineno, group, ', '.join(map(str, table[self.state])), value)
+            error = "%i: got %s, but expected %s: %s" % (lineno, group, ', '.join(map(str, self.table[self.state])), value)
             #if headers.find('namespace') >= 0 or headers.find('class') >= 0:
             #    raise Exception(error)
             #logs.write("%s:%s\n" % (path, error))
@@ -715,7 +725,7 @@ class Parser(object):
             #logs.write("-"*30 + "\n")
             #logs.write('\n'.join(lines[lineno-1:lineno+2]) + '\n')
             #logs.write("-"*30 + "\n")
-            raise Exception(error)
+            raise SnError(error)
         if isinstance(action, Accept):
             self.state  = self.stack.pop(-1)
             result = self.data.pop(-1)
@@ -729,24 +739,7 @@ macroregex = re.compile(r"(\w+(\([^\)]*\))?)\s*(.*)")
 
 def parse(env, includes):
     includes = list(includes)
-    parser = Parser(env)
-    macros = check_output(['gcc', '-dM', '-E'] + includes)
-    for line in [macro.strip() for macro in macros.split('#define')]:
-        if line == "":
-            continue
-        match = macroregex.match(line)
-        name, arglist, value = match.groups()
-        if arglist is None:
-            print name
-            print 'processing', line
-            print 'tokenizing', value
-            
-            groups = []
-            values = []
-            for lineno, group, value in tokenize(value.strip()):
-                groups.append(group)
-                values.append(value)
-            print
+    parser = Parser(translation_unit.table, env)
 
     headers = check_output(['gcc', '-E'] + includes)
     token_stream = tokenize(headers)
@@ -755,6 +748,27 @@ def parse(env, includes):
             continue
         parser.step(lineno, group, value)
     result = parser.step(lineno, None, None)
+
+    macros = check_output(['gcc', '-dM', '-E'] + includes)
+    for line in [macro.strip() for macro in macros.split('#define')]:
+        if line == "":
+            continue
+        match = macroregex.match(line)
+        name, arglist, macrostring = match.groups()
+        if arglist is None:
+            groups = []
+            values = []
+            try:
+                parser = Parser(macro_expression.table, env)
+                for lineno, group, value in tokenize(macrostring.strip()):
+                    parser.step(lineno, group, value)
+                result = parser.step(lineno, None, None)
+                if result is not None:
+                    env.constants[name] = result
+            except SnError as e:
+                env.hard_to_parse_macros[name] = (macrostring, e)
+        else:
+            env.unparsed_parametric_macros[name] = (name, arglist, macrostring)
     return result
 
 #env = None
