@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import re
 from sys import argv, exit
-from parser import Structure, Environment, parse
+from parser import Environment, parse, Union, Structure, Enum
 
 class Signed(object):
     def __init__(self, size):
@@ -33,35 +33,36 @@ class Pointer(object):
 
 prim_space = {
     'pointer': Signed(8),
-    'enum': Signed(4),
-    'char': Unsigned(1),
-    'short': Signed(2),
-    'short int': Signed(2),
-    'int': Signed(4),
-    'long': Signed(8),
-    'long int': Signed(8),
-    'long unsigned int': Unsigned(8),
-    'long long int': Signed(8),
-    'float': Float(4),
-    'double': Float(8),
-    'long double': Float(16),
 }
-mode_types = {
-    '__QI__': Signed(1),
-    '__HI__': Signed(2),
-    '__SI__': Signed(4),
-    '__DI__': Signed(8),
-    '__word__': Signed(4),
-}
+#    'enum': Signed(4),
+#    'char': Unsigned(1),
+#    'short': Signed(2),
+#    'short int': Signed(2),
+#    'int': Signed(4),
+#    'long': Signed(8),
+#    'long int': Signed(8),
+#    'long unsigned int': Unsigned(8),
+#    'long long int': Signed(8),
+#    'float': Float(4),
+#    'double': Float(8),
+#    'long double': Float(16),
+#}
+#mode_types = {
+#    '__QI__': Signed(1),
+#    '__HI__': Signed(2),
+#    '__SI__': Signed(4),
+#    '__DI__': Signed(8),
+#    '__word__': Signed(4),
+#}
 
 
 env = Environment()
 
 env.types.update({
-    '__builtin_va_list': Pointer(Structure(None)),
-    'size_t': Unsigned(prim_space['pointer'].size),
-    '_Bool': Unsigned(4),
-    '_Complex': Unsigned(8),
+    '__builtin_va_list': 'va_list', #Pointer(Structure(None)),
+    'size_t': 'size_t', #Unsigned(prim_space['pointer'].size),
+    '_Bool': '_Bool', #Unsigned(4),
+    '_Complex': '_Complex', #Unsigned(8),
 })
 
 parse(env, argv[1:])
@@ -75,8 +76,114 @@ for name in env.names:
 
 nametable.sort()
 
-for name in nametable:
-    print name
+primitive_types = {
+    'void':           "void",
+    'char':           "ubyte",
+    'unsigned char':  "ubyte",
+    'signed char':    "sbyte",
+    'short':          "short",
+    'unsigned short': "ushort",
+    'int':            "int",
+    'unsigned int':   "uint",
+    'long':           "long",
+    'unsigned long':  "ulong",
+    'long long':      "llong",
+    'unsigned long long': "ullong",
+    'float':          "float",
+    'double':         "double",
+    'long double':    "ldouble",
+}
+
+gcc_primitive_types = {
+    '__QI__': "int8",
+    '__HI__': "int16",
+    '__SI__': "int32",
+    '__DI__': "int64",
+    '__SF__': "float",
+    '__DF__': "double",
+}
+
+env.resolved = {}
+
+def resolve_specifiers(env, declarator):
+    if all(isinstance(a, str) for a in declarator.specifiers):
+        string = ' '.join(declarator.specifiers)
+        if string in primitive_types:
+            return primitive_types[string]
+        elif len(declarator.specifiers) > 0 and declarator.specifiers[-1] == 'int':
+            string = ' '.join(declarator.specifiers[:-1])
+            if string in primitive_types:
+                return primitive_types[string]
+    if len(declarator.specifiers) == 1:
+        typename = declarator.specifiers[0]
+        if typename in env.resolved:
+            return env.resolved[typename]
+        if isinstance(typename, str):
+            typespec = resolve_type(env, env.types[typename])
+            env.resolved[typename] = typespec
+            return typespec
+        if isinstance(typename, Union):
+            fields = []
+            typespec = 'union', fields
+            env.resolved[typename] = typespec
+            if typename.fields is None:
+                return typespec
+            for field in typename.fields:
+                fields.append((field.name, resolve_type(env, field)))
+            return typespec
+        if isinstance(typename, Structure):
+            fields = []
+            typespec = 'struct', fields
+            env.resolved[typename] = typespec
+            if typename.fields is None:
+                return typespec
+            for field in typename.fields:
+                fields.append((field.name, resolve_type(env, field)))
+            return typespec
+        if isinstance(typename, Enum):
+            return "int"
+    raise Exception("what is: %r" % declarator.specifiers)
+
+def resolve_type(env, declarator):
+    if declarator is Ellipsis:
+        return declarator
+    if isinstance(declarator, str):
+        return declarator
+    typespec = resolve_specifiers(env, declarator)
+    for which, params in declarator.attributes:
+        if which == 'attribute':
+            for cell in params:
+                if isinstance(cell, list) and cell[0] == '__mode__':
+                    typespec = gcc_primitive_types[cell[1]]
+                    continue
+                raise Exception("unknown attribute param: %r" % (cell,))
+            continue
+        if len(declarator.attributes) > 0:
+            raise Exception("unknown attribute: %r in %r" % (declarator.attributes, declarator))
+    for which, params in reversed(declarator):
+        if which == 'function':
+            argtypes = [resolve_type(env, param) for param in params]
+            if argtypes == ['void']:
+                argtypes = []
+            typespec = 'function', argtypes, typespec
+        elif which == 'pointer':
+            # ignoring specifiers of a pointer
+            typespec = 'pointer', typespec
+        elif which == 'array':
+            typespec = 'array', typespec, params
+        else:
+            raise Exception("what is: %r" % declarator)
+    return typespec
+
+for name in nametable: #['SDL_Init', 'SDL_VideoInit', 'SDL_VideoQuit']:
+    declarator = env.names[name]
+    if 'extern' not in declarator.qualifiers:
+        continue
+    typespec = resolve_type(env, declarator)
+    print '({} = {})'.format(
+        declarator.name,
+        typespec)
+
 
 #print env.constants
 #print env.types.keys()

@@ -10,7 +10,7 @@ class Environment(object):
         self.enums = {}
         self.unions = {}
         self.structs = {'__locale_data': Structure(None)}
-        self.types = {'void': None}
+        self.types = {}
         self.constants = {}
         self.names = {}
         self.hard_to_parse_macros = {}
@@ -28,12 +28,23 @@ class Declarator(object):
     def __init__(self, name):
         self.name = name
         self.initializer = None
-        self.attributes = None
-        self.specifier = None
+        self.attributes = ()
+        self.specifiers = []
+        self.qualifiers = set()
         self.stack = []
 
+    def __getitem__(self, index):
+        return self.stack[index]
+
+    def __len__(self):
+        return len(self.stack)
+
     def __repr__(self):
-        return "%s %s %r" % (self.name, ' '.join(map(repr, self.stack)), self.specifier)
+        return "%s %s %r" % (self.name, ' '.join(map(repr, self.stack)), ' '.join(list(self.qualifiers) + map(str, self.specifiers)))
+
+class Enum(object):
+    def __init__(self, constants):
+        self.constants = constants
 
 class Structure(object):
     def __init__(self, fields):
@@ -72,10 +83,8 @@ def on_blank(lineno, env):
 @rule('initializer_list = initializer')
 @rule('identifier_list = IDENTIFIER')
 @rule('parameter_list = parameter_declaration')
-@rule('struct_declaration_list = struct_declaration')
 @rule('struct_declarator_list = struct_declarator')
 @rule('enumerator_list = enumerator')
-@rule('specifier_qualifier_list = specifier_qualifier')
 @rule('type_qualifier_list = type_qualifier')
 @rule('attribute_specifier_list = attribute_specifier', label="declarator_attribute")
 @rule('attribute_list = attribute')
@@ -84,13 +93,20 @@ def on_list(lineno, env, obj):
 
 @rule('translation_unit = translation_unit external_declaration')
 @rule('declaration_list = declaration_list declaration')
-@rule('struct_declaration_list = struct_declaration_list struct_declaration')
-@rule('specifier_qualifier_list = specifier_qualifier_list specifier_qualifier')
 @rule('type_qualifier_list = type_qualifier_list type_qualifier')
 @rule('attribute_specifier_list = attribute_specifier_list attribute_specifier')
 def on_append(lineno, env, seq, obj):
     seq.append(obj)
     return seq
+
+@rule('struct_declaration_list = struct_declaration')
+def on_flat_list(lineno, env, obj):
+    return obj
+
+@rule('struct_declaration_list = struct_declaration_list struct_declaration')
+def on_flat_extend(lineno, env, obj, more):
+    obj.extend(more)
+    return obj
 
 @rule('init_declarator_list = init_declarator_list COMMA init_declarator')
 @rule('initializer_list = initializer_list COMMA initializer')
@@ -114,7 +130,8 @@ def on_declaration(lineno, env, specifier, declarators, *sm):
     typedef = 'typedef' in specifier.qualifiers
     for declarator in declarators:
         assert isinstance(declarator, Declarator)
-        declarator.specifier = specifier
+        declarator.specifiers = specifier.specifiers
+        declarator.qualifiers = specifier.qualifiers
         if typedef:
             env.types[declarator.name] = declarator
         else:
@@ -183,7 +200,8 @@ def on_parameter_type_list(lineno, env, parameters, *ellipsis):
 @rule('parameter_declaration = declaration_specifiers abstract_declarator')
 @rule('parameter_declaration = declaration_specifiers blank_abstract_declarator')
 def on_parameter_declaration(lineno, env, specifier, declarator):
-    declarator.specifier = specifier
+    declarator.specifiers = specifier.specifiers
+    declarator.qualifiers = specifier.qualifiers
     return declarator
 
 @rule('abstract_declarator = pointer')
@@ -236,6 +254,8 @@ def on_blank_declaration_specifier(lineno, env):
 @rule('declaration_specifiers = declaration_specifiers      storage_class_specifier')
 @rule('declaration_specifiers = blank_declaration_specifier type_qualifier')
 @rule('declaration_specifiers = declaration_specifiers      type_qualifier')
+@rule('specifier_qualifier_list = blank_declaration_specifier type_qualifier')
+@rule('specifier_qualifier_list = specifier_qualifier_list type_qualifier')
 def on_qualifier(lineno, env, block, qualifier):
     if isinstance(qualifier, str):
         block.qualifiers.add(qualifier)
@@ -245,14 +265,20 @@ def on_qualifier(lineno, env, block, qualifier):
 
 @rule('declaration_specifiers = blank_declaration_specifier type_specifier')
 @rule('declaration_specifiers = declaration_specifiers      type_specifier')
+@rule('specifier_qualifier_list = blank_declaration_specifier type_specifier')
+@rule('specifier_qualifier_list = specifier_qualifier_list type_specifier')
 def on_specifier(lineno, env, block, specifier):
     block.specifiers.append(specifier)
     return block
 
-@rule('specifier_qualifier = type_specifier')
-@rule('specifier_qualifier = type_qualifier')
-def on_specifier_qualifier(lineno, env, specifier):
-    return specifier
+
+#@rule('specifier_qualifier_list = specifier_qualifier')
+#@rule('specifier_qualifier_list = specifier_qualifier_list specifier_qualifier')
+
+#@rule('specifier_qualifier = type_specifier')
+#@rule('specifier_qualifier = type_qualifier')
+#def on_specifier_qualifier(lineno, env, specifier):
+#    return specifier
 
 @rule('storage_class_specifier = attribute_specifier', label="storage_attribute")
 @rule('storage_class_specifier = TYPEDEF')
@@ -342,6 +368,8 @@ def on_struct_or_union_specifier(lineno, env, which, name, lb=None, block=None, 
     obj = space[name] if name in space else cls(None)
     if block is not None:
         obj.fields = block
+    if name is not None:
+        space[name] = obj
     return obj
 
 @rule('struct_identifier = IDENTIFIER')
@@ -355,25 +383,53 @@ def on_struct_or_union(lineno, env, which):
     return {'struct':(Structure, env.structs), 'union':(Union, env.unions)}[which]
 
 @rule('struct_declaration = specifier_qualifier_list struct_declarator_list SEMICOLON')
-def on_struct_declaration(lineno, env, specifier, declarator, sm):
-    return specifier, declarator
+def on_struct_declaration(lineno, env, specifier, declarators, sm):
+    for declarator in declarators:
+        declarator.specifiers = specifier.specifiers
+        declarator.qualifiers = specifier.qualifiers
+    return declarators
 
 @rule('struct_declarator = declarator')
+def on_blank_struct_declarator(lineno, env, declarator):
+    return declarator
+
 @rule('struct_declarator = COLON constant_expression')
+def on_bitfield_declarator(lineno, env, colon, expr):
+    declarator = Declarator(None)
+    declarator.stack.append(('bitfield', expr))
+    return declarator
+
 @rule('struct_declarator = declarator COLON constant_expression')
-def on_struct_declarator(lineno, env, *stuff):
-    return stuff
+def on_bitfield_struct_declarator(lineno, env, declarator, colon, expr):
+    declarator.stack.append(('bitfield', expr))
+    return declarator
 
 @rule('enum_specifier = ENUM LEFT_BRACE enumerator_list RIGHT_BRACE')
+def on_plain_enum_specifier(lineno, env, enum, lb, constants, rb):
+    return Enum(constants)
+
 @rule('enum_specifier = ENUM IDENTIFIER LEFT_BRACE enumerator_list RIGHT_BRACE')
+def on_named_enum_specifier(lineno, env, enum, name, lb, constants, rb):
+    enum = env.enums[name] if name in env.enums else Enum(None)
+    enum.constants = constants
+    if name in env.enums:
+        env.enums[name] = enum
+    return enum
+
 @rule('enum_specifier = ENUM IDENTIFIER')
-def on_enum_specifier(lineno, env, *stuff):
-    return stuff
+def on_enum_specifier(lineno, env, enum, name):
+    enum = env.enums[name] if name in env.enums else Enum(None)
+    if name in env.enums:
+        env.enums[name] = enum
+    return enum
 
 @rule('enumerator = IDENTIFIER')
+def on_implicit_enumerator(lineno, env, ident):
+    return (ident, None)
+
 @rule('enumerator = IDENTIFIER EQUAL constant_expression')
-def on_enumerator(lineno, env, *stuff):
-    return stuff
+def on_enumerator(lineno, env, ident, eq, const):
+    return (ident, const)
 
 @rule('compound_statement = LEFT_BRACE RIGHT_BRACE')
 @rule('compound_statement = LEFT_BRACE statement_list RIGHT_BRACE')
