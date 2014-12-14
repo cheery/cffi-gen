@@ -83,7 +83,7 @@ def token(stream):
             while ishex(stream.character):
                 string += stream.adv()
             while stream.character.isalpha():
-                string += stream.adv()
+                stream.adv()
             return lineno, 'INTCONSTANT', int(string, 16)
         while isoctal(stream.character):
             string += stream.adv()

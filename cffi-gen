@@ -3,6 +3,9 @@ import re
 from sys import argv, exit
 from parser import Environment, parse, Union, Structure, Enum
 
+def rewrite_name(name):
+    return re.sub('^SDL_', '', name)
+
 class Signed(object):
     def __init__(self, size):
         self.size = size
@@ -29,7 +32,25 @@ class Pointer(object):
         self.tp = tp
 
     def __repr__(self):
-        return repr(self.tp) + '*'
+        return "{}*".format(self.tp)
+
+class FuncType(object):
+    def __init__(self, argtypes, restype):
+        self.argtypes = argtypes
+        self.restype = restype
+
+class Block(object):
+    def __init__(self, which, fields):
+        self.which = which
+        self.fields = fields
+
+#    def __repr__(self):
+#        if len(self.fields) == 0:
+#            return 'opaque'
+#        out = ['struct']
+#        for name, field in self.fields:
+#            out.append("({} = {})".format(name, field).replace('\n', '\n    '))
+#        return '\n'.join(out)
 
 prim_space = {
     'pointer': Signed(8),
@@ -59,53 +80,164 @@ prim_space = {
 env = Environment()
 
 env.types.update({
-    '__builtin_va_list': 'va_list', #Pointer(Structure(None)),
+    '__builtin_va_list': None, #'va_list', #Pointer(Structure(None)),
     'size_t': 'size_t', #Unsigned(prim_space['pointer'].size),
-    '_Bool': '_Bool', #Unsigned(4),
-    '_Complex': '_Complex', #Unsigned(8),
+    '_Bool': 'bool', #Unsigned(4),
+    '_Complex': 'complex', #Unsigned(8),
 })
 
 parse(env, argv[1:])
 
 
+def name_renaming(name):
+    return re.sub(r'^SDL_', '', name)
+
 nametable = []
+constable = []
+
+for name in env.constants:
+    if re.match(r'^SDL_[A-Z]', name):
+        constable.append(name)
 
 for name in env.names:
     if re.match(r'^SDL_[A-Z]', name):
         nametable.append(name)
 
 nametable.sort()
+constable.sort()
 
 primitive_types = {
-    'void':           "void",
-    'char':           "ubyte",
-    'unsigned char':  "ubyte",
-    'signed char':    "sbyte",
-    'short':          "short",
-    'unsigned short': "ushort",
-    'int':            "int",
-    'unsigned int':   "uint",
-    'long':           "long",
-    'unsigned long':  "ulong",
-    'long long':      "llong",
+    'void':               "void",
+    'char':               "ubyte",
+    'unsigned char':      "ubyte",
+    'signed char':        "sbyte",
+    'short':              "short",
+    'unsigned short':     "ushort",
+    'int':                "int",
+    'unsigned int':       "uint",
+    'long':               "long",
+    'unsigned long':      "ulong",
+    'long long':          "llong",
     'unsigned long long': "ullong",
-    'float':          "float",
-    'double':         "double",
-    'long double':    "ldouble",
+    'float':              "float",
+    'double':             "double",
+    'long double':        "ldouble",
 }
 
 gcc_primitive_types = {
-    '__QI__': "int8",
-    '__HI__': "int16",
-    '__SI__': "int32",
-    '__DI__': "int64",
+    '__QI__': "i8",
+    '__HI__': "i16",
+    '__SI__': "i32",
+    '__DI__': "i64",
     '__SF__': "float",
     '__DF__': "double",
 }
 
-env.resolved = {}
+class Resolver(object):
+    def __init__(self, rename_fn):
+        self.writeout = set()
+        self.pending = set()
+        self.alias = {}
+        self.failed = False
+        self.rename_fn = rename_fn
+        self.renamings = {}
 
-def resolve_specifiers(env, declarator):
+    def rename(self, name):
+        renamed = self.rename_fn(name)
+        self.renamings[name] = renamed
+        return renamed
+
+    def rollback(self):
+        self.pending = set()
+        self.failed = False
+
+    def commit(self):
+        if self.failed:
+            self.rollback()
+            return False
+        self.writeout.update(self.pending)
+        self.pending = set()
+        return True
+
+    def visit(self, obj):
+        if obj in self.writeout or obj in self.pending:
+            return False
+        self.pending.add(obj)
+        return True
+
+def unroll_typedef(env, declarator):
+    if isinstance(declarator, str) or declarator is None:
+        return declarator
+    primtype = resolve_primitive_type(env, declarator)
+    if primtype is None:
+        if len(declarator.specifiers) == 1:
+            basetype = declarator.specifiers[0]
+            if isinstance(basetype, str):
+                primtype = unroll_typedef(env, env.types[basetype])
+            if isinstance(basetype, Enum):
+                primtype = 'int'
+    if primtype is None:
+        return
+    for which, params in declarator.attributes:
+        if which == 'attribute':
+            for cell in params:
+                if isinstance(cell, list) and cell[0] == '__mode__':
+                    assert primtype == 'int', primtype
+                    primtype = gcc_primitive_types[cell[1]]
+                    continue
+                raise Exception("unknown attribute param: %r" % (cell,))
+            continue
+        if len(declarator.attributes) > 0:
+            raise Exception("unknown attribute: %r in %r" % (declarator.attributes, declarator))
+    for which, params in reversed(declarator):
+        if which == 'pointer':
+            primtype += '*'
+        else:
+            return
+    return primtype
+
+def resolve_typedecl(env, typedecl, resolver):
+    if typedecl is None:
+        resolver.failed = True
+        return
+    if len(typedecl.specifiers) == 1 and isinstance(typedecl.specifiers[0], (Structure, Union)):
+        typespec = typedecl.specifiers[0]
+        if resolver.visit(typespec) and typespec.fields is not None:
+            for field in typespec.fields:
+                resolve_typedecl(env, field, resolver)
+    else:
+        typespec = resolve_specifiers(env, typedecl, resolver)
+    for which, params in reversed(declarator):
+        if which == 'function':
+            argtypes = [resolve_name(env, param, resolver) for param in params]
+            if argtypes == ['void']:
+                argtypes = []
+            typespec = FuncType(argtypes, typespec)
+        elif which == 'pointer':
+            # ignoring specifiers of a pointer
+            typespec = Pointer(typespec)
+        elif which == 'array':
+            typespec = 'array', typespec, params
+
+def resolve_specifiers(env, declarator, resolver):
+    primtype = resolve_primitive_type(env, declarator)
+    if primtype is not None:
+        return primtype
+    if len(declarator.specifiers) == 1:
+        typename = declarator.specifiers[0]
+        typedecl = env.types[typename]
+        if typedecl in resolver.alias:
+            return resolver.alias[typedecl]
+        aliased = unroll_typedef(env, typedecl)
+        if isinstance(aliased, str):
+            resolver.alias[typedecl] = aliased
+            return aliased
+        if resolver.visit(typename):
+            resolve_typedecl(env, typedecl, resolver)
+        return resolver.rename(typename)
+    raise Exception("what is %r" % declarator.specifiers)
+
+def resolve_primitive_type(env, declarator):
     if all(isinstance(a, str) for a in declarator.specifiers):
         string = ' '.join(declarator.specifiers)
         if string in primitive_types:
@@ -114,82 +246,151 @@ def resolve_specifiers(env, declarator):
             string = ' '.join(declarator.specifiers[:-1])
             if string in primitive_types:
                 return primitive_types[string]
-    if len(declarator.specifiers) == 1:
-        typename = declarator.specifiers[0]
-        if typename in env.resolved:
-            return env.resolved[typename]
-        if isinstance(typename, str):
-            typespec = resolve_type(env, env.types[typename])
-            env.resolved[typename] = typespec
-            return typespec
-        if isinstance(typename, Union):
-            fields = []
-            typespec = 'union', fields
-            env.resolved[typename] = typespec
-            if typename.fields is None:
-                return typespec
-            for field in typename.fields:
-                fields.append((field.name, resolve_type(env, field)))
-            return typespec
-        if isinstance(typename, Structure):
-            fields = []
-            typespec = 'struct', fields
-            env.resolved[typename] = typespec
-            if typename.fields is None:
-                return typespec
-            for field in typename.fields:
-                fields.append((field.name, resolve_type(env, field)))
-            return typespec
-        if isinstance(typename, Enum):
-            return "int"
-    raise Exception("what is: %r" % declarator.specifiers)
 
-def resolve_type(env, declarator):
+def resolve_name(env, declarator, resolver):
     if declarator is Ellipsis:
         return declarator
-    if isinstance(declarator, str):
-        return declarator
-    typespec = resolve_specifiers(env, declarator)
-    for which, params in declarator.attributes:
-        if which == 'attribute':
-            for cell in params:
-                if isinstance(cell, list) and cell[0] == '__mode__':
-                    typespec = gcc_primitive_types[cell[1]]
-                    continue
-                raise Exception("unknown attribute param: %r" % (cell,))
-            continue
-        if len(declarator.attributes) > 0:
-            raise Exception("unknown attribute: %r in %r" % (declarator.attributes, declarator))
+    typespec = resolve_specifiers(env, declarator, resolver)
     for which, params in reversed(declarator):
         if which == 'function':
-            argtypes = [resolve_type(env, param) for param in params]
+            argtypes = [resolve_name(env, param, resolver) for param in params]
             if argtypes == ['void']:
                 argtypes = []
-            typespec = 'function', argtypes, typespec
+            typespec = FuncType(argtypes, typespec)
         elif which == 'pointer':
             # ignoring specifiers of a pointer
-            typespec = 'pointer', typespec
-        elif which == 'array':
-            typespec = 'array', typespec, params
+            typespec = Pointer(typespec)
+#        elif which == 'array':
+#            typespec = 'array', typespec, params
         else:
             raise Exception("what is: %r" % declarator)
     return typespec
 
-for name in nametable: #['SDL_Init', 'SDL_VideoInit', 'SDL_VideoQuit']:
+def build_typestring(typespec):
+    if isinstance(typespec, str):
+        return typespec
+    if isinstance(typespec, Pointer):
+        result = build_typestring(typespec.tp)
+        if isinstance(result, str):
+            return result + '*'
+
+
+resolver = Resolver(name_renaming)
+names = set()
+
+for name in nametable:
+    resolver.rollback()
     declarator = env.names[name]
     if 'extern' not in declarator.qualifiers:
         continue
-    typespec = resolve_type(env, declarator)
-    print '({} = {})'.format(
-        declarator.name,
-        typespec)
+    typespec = resolve_name(env, declarator, resolver)
+    if isinstance(typespec, FuncType):
+        resstr = build_typestring(typespec.restype)
+        argstr = [build_typestring(arg) for arg in typespec.argtypes]
+        if 'va_list' in resolver.pending or 'FILE' in resolver.pending:
+            continue
+        if all(isinstance(arg, str) for arg in argstr):
+            goodname = resolver.rename(name)
+            if resolver.commit():
+                print '({} = {} {} {})'.format(goodname, resstr, name, ' '.join(argstr))
+            names.add(goodname)
+
+writeouts = {}
+for block in list(resolver.writeout):
+    if not isinstance(block, str):
+        continue
+    name = resolver.rename(block)
+    names.add(name)
+    typedecl = env.types[block]
+    if len(typedecl) == 0 and len(typedecl.specifiers) == 1 and typedecl.specifiers[0] in resolver.writeout:
+        structure = typedecl.specifiers[0]
+        resolver.writeout.discard(structure)
+        resolver.alias[structure] = name
+        writeouts[name] = structure
+    else:
+        writeouts[name] = typedecl
+
+for block in resolver.writeout:
+    if isinstance(block, (Structure, Union)):
+        if block.name is None: # in this special situation, the block is inline
+            continue
+        name = resolver.rename(block.name)
+        while name in names:
+            name = 'struct_' + name
+        names.add(name)
+        resolver.alias[block] = name
+        writeouts[name] = block
+
+def writeout_resolve(env, declarator, resolver):
+    primtype = resolve_primitive_type(env, declarator)
+    if primtype is None:
+        if len(declarator.specifiers) == 1:
+            basename = declarator.specifiers[0]
+            if basename in resolver.alias:
+                basetype = resolver.alias[basename]
+            elif isinstance(basename, str):
+                typedecl = env.types[basename]
+                if typedecl in resolver.alias:
+                    basetype = resolver.alias[typedecl]
+                else:
+                    basetype = resolver.rename(basename)
+            elif isinstance(basename, (Structure, Union)):
+                if basename.fields is None:
+                    basetype = '(opaque)'
+                which = 'struct' if isinstance(block, Structure) else 'union'
+                listing = [which]
+                for field in basename.fields:
+                    listing.append("({} = {})".format(field.name, writeout_resolve(env, field, resolver)))
+                basetype = "({})".format(' '.join(listing))
+            elif basename is None:
+                basetype = 'void*'
+            else:
+                raise Exception("weird specifier %r" % declarator)
+        else:
+            raise Exception("weird specifier %r" % declarator.specifier)
+    else:
+        basetype = primtype
+
+    pointerSlurp = False
+    for which, params in reversed(declarator):
+        if which == 'function':
+            argtypes = [writeout_resolve(env, param, resolver) for param in params]
+            if argtypes == ['void']:
+                argtypes = []
+            basetype = '(cfunc {})'.format(' '.join(argtypes + [basetype]))
+            pointerSlurp = True
+        elif which == 'pointer':
+            if pointerSlurp:
+                pointerSlurp = False
+            else:
+                # ignoring specifiers of a pointer
+                if basetype.startswith('('):
+                    basetype = '(* {})'.format(basetype)
+                else:
+                    basetype = basetype + '*'
+        elif which == 'array':
+            pointerSlurp = False
+            basetype = '(array {} {})'.format(basetype, params)
+        else:
+            raise Exception("what is: %r" % declarator)
+    return basetype
 
 
-#print env.constants
-#print env.types.keys()
-#print env.hard_to_parse_macros.keys()
-
-#for name, declarator in name_space.items():
-#    if name.startswith('SDL'):
-#        print name.rjust(40), ' '.join(map(repr, declarator.stack)), declarator.specifier
-
+for name in sorted(writeouts):
+    block = writeouts[name]
+    if isinstance(block, (Structure, Union)):
+        if block.fields is None:
+            print "({} = opaque)".format(name)
+            continue
+        which = 'struct' if isinstance(block, Structure) else 'union'
+        listing = ["{} = {}".format(name, which)]
+        for field in block.fields:
+            listing.append("    ({} = {})".format(field.name, writeout_resolve(env, field, resolver)))
+        print "({})".format('\n'.join(listing))
+    else:
+        print "({} = {})".format(name, writeout_resolve(env, block, resolver))
+            
+for name in constable:
+    const = env.constants[name]
+    if isinstance(const, (int, str)):
+        print "({} = {})".format(rewrite_name(name), const)

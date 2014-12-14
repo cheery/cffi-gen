@@ -44,16 +44,63 @@ class Declarator(object):
 
 class Enum(object):
     def __init__(self, constants):
+        self.name = None
         self.constants = constants
 
 class Structure(object):
     def __init__(self, fields):
+        self.name   = None
         self.fields = fields
 
 class Union(object):
     def __init__(self, fields):
+        self.name   = None
         self.fields = fields
 
+class Unresolved(object):
+    pass
+
+class Identifier(Unresolved):
+    "When a name cannot be resolved"
+    def __init__(self, name):
+        self.name = name
+
+    def __repr__(self):
+        return 'unresolved({})'.format(self.name)
+
+    def attempt_resolve(self, env):
+        if self.name in env.constants:
+            const = env.constants[self.name]
+            if const is self:
+                return const
+            if isinstance(const, Unresolved):
+                const = const.attempt_resolve(env)
+                env.constants[self.name] = const
+            return const
+        return self
+
+class Sizeof(Unresolved):
+    def __init__(self, typesign):
+        self.typesign = typesign
+
+    def attempt_resolve(self, env):
+        return self
+
+class BinOp(Unresolved):
+    def __init__(self, op, lhs, rhs):
+        self.op = op
+        self.lhs = lhs
+        self.rhs = rhs
+
+    def __repr__(self):
+        return '({} {} {})'.format(self.lhs, self.op, self.rhs)
+
+    def attempt_resolve(self, env):
+        lhs = self.lhs.attempt_resolve(env) if isinstance(self.lhs, Unresolved) else self.lhs
+        rhs = self.rhs.attempt_resolve(env) if isinstance(self.rhs, Unresolved) else self.rhs
+        if isinstance(lhs, Unresolved) or isinstance(rhs, Unresolved):
+            return self
+        return operator_table[self.op](lhs, rhs)
 
 rules = []
 labelled_rules = {}
@@ -84,7 +131,6 @@ def on_blank(lineno, env):
 @rule('identifier_list = IDENTIFIER')
 @rule('parameter_list = parameter_declaration')
 @rule('struct_declarator_list = struct_declarator')
-@rule('enumerator_list = enumerator')
 @rule('type_qualifier_list = type_qualifier')
 @rule('attribute_specifier_list = attribute_specifier', label="declarator_attribute")
 @rule('attribute_list = attribute')
@@ -113,7 +159,6 @@ def on_flat_extend(lineno, env, obj, more):
 @rule('identifier_list = identifier_list COMMA IDENTIFIER')
 @rule('parameter_list = parameter_list COMMA parameter_declaration')
 @rule('struct_declarator_list = struct_declarator_list COMMA struct_declarator')
-@rule('enumerator_list = enumerator_list COMMA enumerator')
 @rule('attribute_list = attribute_list COMMA attribute')
 def on_separator_append(lineno, env, seq, sep, obj):
     seq.append(obj)
@@ -366,6 +411,7 @@ def on_initializer_list(lineno, env, lb, initlist, *rest):
 def on_struct_or_union_specifier(lineno, env, which, name, lb=None, block=None, rb=None):
     cls, space = which
     obj = space[name] if name in space else cls(None)
+    obj.name = name
     if block is not None:
         obj.fields = block
     if name is not None:
@@ -411,6 +457,7 @@ def on_plain_enum_specifier(lineno, env, enum, lb, constants, rb):
 @rule('enum_specifier = ENUM IDENTIFIER LEFT_BRACE enumerator_list RIGHT_BRACE')
 def on_named_enum_specifier(lineno, env, enum, name, lb, constants, rb):
     enum = env.enums[name] if name in env.enums else Enum(None)
+    enum.name = name
     enum.constants = constants
     if name in env.enums:
         env.enums[name] = enum
@@ -419,9 +466,26 @@ def on_named_enum_specifier(lineno, env, enum, name, lb, constants, rb):
 @rule('enum_specifier = ENUM IDENTIFIER')
 def on_enum_specifier(lineno, env, enum, name):
     enum = env.enums[name] if name in env.enums else Enum(None)
+    enum.name = name
     if name in env.enums:
         env.enums[name] = enum
     return enum
+
+@rule('enumerator_list = enumerator')
+def on_first_enumerator(lineno, env, enumerator):
+    ident, const = enumerator
+    const = 0 if const is None else const
+    env.constants[ident] = const
+    return [(ident, const)]
+
+@rule('enumerator_list = enumerator_list COMMA enumerator')
+def on_more_enumerators(lineno, env, enumerators, comma, enumerator):
+    previous_const = enumerators[-1][1]
+    ident, const = enumerator
+    const = previous_const + 1 if const is None else const
+    env.constants[ident] = const
+    enumerators.append((ident, const))
+    return enumerators
 
 @rule('enumerator = IDENTIFIER')
 def on_implicit_enumerator(lineno, env, ident):
@@ -465,6 +529,8 @@ def on_const_expression(lineno, env, value):
 @rule('constant_divmul = constant_divmul SLASH constant_term')
 @rule('constant_divmul = constant_divmul STAR constant_term')
 def on_const_binop(lineno, env, lhs, op, rhs):
+    if isinstance(lhs, Unresolved) or isinstance(rhs, Unresolved):
+        return BinOp(op, lhs, rhs)
     value = operator_table[op](lhs, rhs)
     return value
 
@@ -482,9 +548,10 @@ operator_table = {
 }
 
 @rule('constant_term = IDENTIFIER')
-def on_minus_prefix(lineno, env, value):
-    # BAD: incorrect, fix
-    return 0
+def on_constant_term(lineno, env, name):
+    if name in env.constants:
+        return env.constants[name]
+    return Identifier(name)
 
 @rule('constant_term = CHARACTER')
 def on_minus_prefix(lineno, env, value):
@@ -504,8 +571,7 @@ def on_int_constant(lineno, env, lp, value, rp):
 
 @rule('constant_term = SIZEOF LEFT_PAREN type_expression RIGHT_PAREN')
 def on_sizeof_term(lineno, env, sz, lp, typesign, rp):
-    # BAD: incorrect, fix.
-    return 8
+    return Sizeof(typesign)
 
 @rule('constant_term = LEFT_PAREN type_expression RIGHT_PAREN constant_term')
 def on_sizeof_term(lineno, env, lp, typesign, rp, ct):
@@ -741,7 +807,6 @@ assert len(translation_unit.conflicts) == 0, lrkit.diagnose(translation_unit)
 
 macro_expression = canonical.simulate(rules, 'macro_expression')
 assert len(macro_expression.conflicts) == 0, lrkit.diagnose(translation_unit)
-print 'parsing'
 
 class SnError(Exception):
     def __init__(self, message):
@@ -825,6 +890,11 @@ def parse(env, includes):
                 env.hard_to_parse_macros[name] = (macrostring, e)
         else:
             env.unparsed_parametric_macros[name] = (name, arglist, macrostring)
+    for name in env.constants:
+        const = env.constants[name]
+        if isinstance(const, Unresolved):
+            const = const.attempt_resolve(env)
+            env.constants[name] = const
     return result
 
 #env = None
