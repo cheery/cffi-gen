@@ -28,14 +28,15 @@ for name, value in env.constants.iteritems():
             name = re.sub(r"^SDL_", r"", name)
             constants[name] = value
 
-for name in env.names:
-    if re.match(r'^SDL_\w', name):
-        typespec = translate.declarator(env.names[name])
-        name = re.sub(r"^SDL_", r"", name)
+for cname in env.names:
+    if re.match(r'^SDL_\w', cname):
+        typespec = translate.declarator(env.names[cname])
+        name = re.sub(r"^SDL_", r"", cname)
         if is_function(typespec):
+            typespec['name'] = cname
             functions[name] = typespec
         else:
-            variables[name] = typespec
+            variables[name] = {'name':cname, 'type':typespec}
 
 print json.dumps({
     'constants': constants,

@@ -55,14 +55,15 @@ The translator renames constructs in the environment, after your command. You ca
     functions = {}
     variables = {}
 
-    for name in env.names:
-        if re.match(r'^SDL_\w', name):
-            typespec = translate.declarator(env.names[name])
-            name = re.sub(r"^SDL_", r"", name)
+    for cname in env.names:
+        if re.match(r'^SDL_\w', cname):
+            typespec = translate.declarator(env.names[cname])
+            name = re.sub(r"^SDL_", r"", cname)
             if is_function(typespec):
+                typespec['name'] = cname
                 functions[name] = typespec
             else:
-                variables[name] = typespec
+                variables[name] = {'name':cname, 'type':typespec}
 
 You probably want some constants with those functions. The parser parses also the macroenvironment dumped by GCC, you can obtain it from the environment, as long as you look after unresolved entries:
 
