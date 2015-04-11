@@ -52,18 +52,13 @@ For this we've got a Translator. It's a bit like a template for your program:
 
 The translator renames constructs in the environment, after your command. You can pass it the constructs you want to include in your .json output. Here's an example how to etract and rename some C functions with a regex:
 
-    functions = {}
     variables = {}
 
     for cname in env.names:
         if re.match(r'^SDL_\w', cname):
             typespec = translate.declarator(env.names[cname])
             name = re.sub(r"^SDL_", r"", cname)
-            if is_function(typespec):
-                typespec['name'] = cname
-                functions[name] = typespec
-            else:
-                variables[name] = {'name':cname, 'type':typespec}
+            variables[name] = {'name':cname, 'type':typespec}
 
 You probably want some constants with those functions. The parser parses also the macroenvironment dumped by GCC, you can obtain it from the environment, as long as you look after unresolved entries:
 
@@ -78,6 +73,5 @@ The translate.types will contain the types required by the commands you requeste
 
     print json.dumps({
         'constants': constants,
-        'functions': functions,
         'types': translate.types,
         'variables': variables}, indent=2, sort_keys=True)

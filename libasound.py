@@ -18,7 +18,6 @@ translate.bluelist.update({
 })
 
 constants = {}
-functions = {}
 variables = {}
 
 for name, value in env.constants.iteritems():
@@ -31,14 +30,9 @@ for cname in env.names:
     if re.match(r'^snd_\w', cname):
         typespec = translate.declarator(env.names[cname])
         name = re.sub(r"^snd_", r"", cname)
-        if is_function(typespec):
-            typespec['name'] = cname
-            functions[name] = typespec
-        else:
-            variables[name] = {'name':cname, 'type':typespec}
+        variables[name] = {'name':cname, 'type':typespec}
 
 print json.dumps({
     'constants': constants,
-    'functions': functions,
     'types': translate.types,
     'variables': variables}, indent=2, sort_keys=True)
