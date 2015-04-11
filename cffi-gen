@@ -3,9 +3,6 @@ import re
 from sys import argv, exit
 from parser import Environment, parse, Union, Structure, Enum
 
-def rewrite_name(name):
-    return re.sub('^SDL_', '', name)
-
 class Signed(object):
     def __init__(self, size):
         self.size = size
@@ -89,11 +86,29 @@ env.types.update({
 parse(env, argv[1:])
 
 
-def name_renaming(name):
-    return re.sub(r'^SDL_', '', name)
-
 nametable = []
 constable = []
+
+#def name_renaming(name):
+#    if re.match(r'^gl', name):
+#        name = re.sub(r"^gl(.)", r'\1', name)
+#        return name[:1].lower() + name[1:]
+#    if re.match(r'^GL_', name):
+#        return re.sub(r"^GL_", "", name)
+#    if re.match(r'^GL', name):
+#        return re.sub(r"^GL", "", name)
+#    return name
+#
+#for name in env.constants:
+#    if re.match(r'^gl|^GL', name):
+#        constable.append(name)
+#
+#for name in env.names:
+#    if re.match(r'^gl|^GL', name):
+#        nametable.append(name)
+
+def name_renaming(name):
+    return re.sub(r'^SDL_', '', name)
 
 for name in env.constants:
     if re.match(r'^SDL_[A-Z]', name):
@@ -260,8 +275,8 @@ def resolve_name(env, declarator, resolver):
         elif which == 'pointer':
             # ignoring specifiers of a pointer
             typespec = Pointer(typespec)
-#        elif which == 'array':
-#            typespec = 'array', typespec, params
+        elif which == 'array':
+            typespec = 'array', typespec, params
         else:
             raise Exception("what is: %r" % declarator)
     return typespec
@@ -281,8 +296,9 @@ names = set()
 for name in nametable:
     resolver.rollback()
     declarator = env.names[name]
-    if 'extern' not in declarator.qualifiers:
-        continue
+    #if 'extern' not in declarator.qualifiers:
+    #    print 'discarded', name, 'because not extern'
+    #    continue
     typespec = resolve_name(env, declarator, resolver)
     if isinstance(typespec, FuncType):
         resstr = build_typestring(typespec.restype)
@@ -393,4 +409,4 @@ for name in sorted(writeouts):
 for name in constable:
     const = env.constants[name]
     if isinstance(const, (int, str)):
-        print "({} = {})".format(rewrite_name(name), const)
+        pass#print "({} = {})".format(resolver.rename(name), const)

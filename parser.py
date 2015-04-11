@@ -48,11 +48,13 @@ class Enum(object):
         self.constants = constants
 
 class Structure(object):
+    which = 'struct'
     def __init__(self, fields):
         self.name   = None
         self.fields = fields
 
 class Union(object):
+    which = 'union'
     def __init__(self, fields):
         self.name   = None
         self.fields = fields
@@ -451,11 +453,13 @@ def on_bitfield_struct_declarator(lineno, env, declarator, colon, expr):
     return declarator
 
 @rule('enum_specifier = ENUM LEFT_BRACE enumerator_list RIGHT_BRACE')
-def on_plain_enum_specifier(lineno, env, enum, lb, constants, rb):
+@rule('enum_specifier = ENUM LEFT_BRACE enumerator_list COMMA RIGHT_BRACE')
+def on_plain_enum_specifier(lineno, env, enum, lb, constants, *_):
     return Enum(constants)
 
 @rule('enum_specifier = ENUM IDENTIFIER LEFT_BRACE enumerator_list RIGHT_BRACE')
-def on_named_enum_specifier(lineno, env, enum, name, lb, constants, rb):
+@rule('enum_specifier = ENUM IDENTIFIER LEFT_BRACE enumerator_list COMMA RIGHT_BRACE')
+def on_named_enum_specifier(lineno, env, enum, name, lb, constants, *_):
     enum = env.enums[name] if name in env.enums else Enum(None)
     enum.name = name
     enum.constants = constants
@@ -809,8 +813,13 @@ macro_expression = canonical.simulate(rules, 'macro_expression')
 assert len(macro_expression.conflicts) == 0, lrkit.diagnose(translation_unit)
 
 class SnError(Exception):
-    def __init__(self, message):
+    def __init__(self, lineno, message):
+        self.lineno = lineno
+        self.extra = []
         Exception.__init__(self, message)
+
+    def __str__(self):
+        return self.message + ''.join('\n'+x for x in self.extra)
 
 class Parser(object):
     def __init__(self, table, env):
@@ -846,7 +855,7 @@ class Parser(object):
             #logs.write("-"*30 + "\n")
             #logs.write('\n'.join(lines[lineno-1:lineno+2]) + '\n')
             #logs.write("-"*30 + "\n")
-            raise SnError(error)
+            raise SnError(lineno, error)
         if isinstance(action, Accept):
             self.state  = self.stack.pop(-1)
             result = self.data.pop(-1)
@@ -858,17 +867,31 @@ class Parser(object):
 
 macroregex = re.compile(r"(\w+(\([^\)]*\))?)\s*(.*)")
 
-def parse(env, includes):
+def default_env():
+    env = Environment()
+    env.types.update({
+        '__builtin_va_list': 'va_list',
+        'size_t': 'size_t',
+        '_Bool': 'bool',
+        '_Complex': 'complex',
+    })
+    return env
+
+def parse(env, includes, lce=5):
     includes = list(includes)
     parser = Parser(translation_unit.table, env)
 
     headers = check_output(['gcc', '-E'] + includes)
     token_stream = tokenize(headers)
-    for lineno, group, value in token_stream:
-        if group == 'MACRO':
-            continue
-        parser.step(lineno, group, value)
-    result = parser.step(lineno, None, None)
+    try:
+        for lineno, group, value in token_stream:
+            if group == 'MACRO':
+                continue
+            parser.step(lineno, group, value)
+        result = parser.step(lineno, None, None)
+    except SnError as error:
+        supply_snerror_extra(error, headers, lce)
+        raise
 
     macros = check_output(['gcc', '-dM', '-E'] + includes)
     for line in [macro.strip() for macro in macros.split('#define')]:
@@ -895,7 +918,15 @@ def parse(env, includes):
         if isinstance(const, Unresolved):
             const = const.attempt_resolve(env)
             env.constants[name] = const
-    return result
+
+def supply_snerror_extra(error, source, lce):
+    lines = source.splitlines()
+    error.extra.append('{} lines before error:'.format(lce))
+    for line in lines[error.lineno-1-lce:error.lineno-1]:
+        error.extra.append(line)
+    error.extra.append('{} lines at error:'.format(lce))
+    for line in lines[error.lineno-1:error.lineno-1+lce]:
+        error.extra.append(line)
 
 #env = None
 #attributes = []
