@@ -99,6 +99,8 @@ class Translator(object):
                             assert False, typename # hmm...
                         name = self.rename(typename)
                         ctype = self.typedecl(typedecl)
+                        if ctype == name: # For the interesting case of:
+                            return name   # typedef struct name name;
                         assert name not in self.types, name
                         self.types[name] = ctype
                         return name

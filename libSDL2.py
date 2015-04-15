@@ -12,10 +12,10 @@ translate.blacklist.update([
     '_IO_FILE',
 ])
 translate.bluelist.update({
-    'SDL_AudioCVT': 'AudioCVT_t',
-    'SDL_assert_data': 'assert_data_t',
-    'SDL_PixelFormat': 'PixelFormat_t',
-    'SDL_RWops': 'RWops_t',
+    'SDL_AudioCVT': 'AudioCVT',
+    'SDL_assert_data': 'assert_data',
+    'SDL_PixelFormat': 'PixelFormat',
+    'SDL_RWops': 'RWops',
 })
 
 constants = {}
