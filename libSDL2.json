@@ -696,7 +696,60 @@
       }, 
       "type": "pointer"
     }, 
-    "AudioCVT": "AudioCVT", 
+    "AudioCVT": "AudioCVT_t", 
+    "AudioCVT_t": {
+      "fields": [
+        [
+          "needed", 
+          "int"
+        ], 
+        [
+          "src_format", 
+          "ushort"
+        ], 
+        [
+          "dst_format", 
+          "ushort"
+        ], 
+        [
+          "rate_incr", 
+          "double"
+        ], 
+        [
+          "buf", 
+          "ubyte*"
+        ], 
+        [
+          "len", 
+          "int"
+        ], 
+        [
+          "len_cvt", 
+          "int"
+        ], 
+        [
+          "len_mult", 
+          "int"
+        ], 
+        [
+          "len_ratio", 
+          "double"
+        ], 
+        [
+          "filters", 
+          {
+            "ctype": "AudioFilter", 
+            "length": 10, 
+            "type": "array"
+          }
+        ], 
+        [
+          "filter_index", 
+          "int"
+        ]
+      ], 
+      "type": "struct"
+    }, 
     "AudioCallback": {
       "to": {
         "argtypes": [
@@ -713,7 +766,7 @@
     "AudioFilter": {
       "to": {
         "argtypes": [
-          "AudioCVT**", 
+          "AudioCVT_t**", 
           "ushort"
         ], 
         "restype": "void", 
@@ -2058,7 +2111,92 @@
       ], 
       "type": "struct"
     }, 
-    "PixelFormat": "PixelFormat", 
+    "PixelFormat": "PixelFormat_t", 
+    "PixelFormat_t": {
+      "fields": [
+        [
+          "format", 
+          "uint"
+        ], 
+        [
+          "palette", 
+          "Palette*"
+        ], 
+        [
+          "BitsPerPixel", 
+          "ubyte"
+        ], 
+        [
+          "BytesPerPixel", 
+          "ubyte"
+        ], 
+        [
+          "padding", 
+          {
+            "ctype": "ubyte", 
+            "length": 2, 
+            "type": "array"
+          }
+        ], 
+        [
+          "Rmask", 
+          "uint"
+        ], 
+        [
+          "Gmask", 
+          "uint"
+        ], 
+        [
+          "Bmask", 
+          "uint"
+        ], 
+        [
+          "Amask", 
+          "uint"
+        ], 
+        [
+          "Rloss", 
+          "ubyte"
+        ], 
+        [
+          "Gloss", 
+          "ubyte"
+        ], 
+        [
+          "Bloss", 
+          "ubyte"
+        ], 
+        [
+          "Aloss", 
+          "ubyte"
+        ], 
+        [
+          "Rshift", 
+          "ubyte"
+        ], 
+        [
+          "Gshift", 
+          "ubyte"
+        ], 
+        [
+          "Bshift", 
+          "ubyte"
+        ], 
+        [
+          "Ashift", 
+          "ubyte"
+        ], 
+        [
+          "refcount", 
+          "int"
+        ], 
+        [
+          "next", 
+          "PixelFormat_t**"
+        ]
+      ], 
+      "type": "struct"
+    }, 
     "Point": {
       "fields": [
         [
@@ -2085,7 +2223,154 @@
       ], 
       "type": "struct"
     }, 
-    "RWops": "RWops", 
+    "RWops": "RWops_t", 
+    "RWops_t": {
+      "fields": [
+        [
+          "size", 
+          {
+            "to": {
+              "argtypes": [
+                "RWops_t**"
+              ], 
+              "restype": "i64", 
+              "type": "cfunc", 
+              "vararg": false
+            }, 
+            "type": "pointer"
+          }
+        ], 
+        [
+          "seek", 
+          {
+            "to": {
+              "argtypes": [
+                "RWops_t**", 
+                "i64", 
+                "int"
+              ], 
+              "restype": "i64", 
+              "type": "cfunc", 
+              "vararg": false
+            }, 
+            "type": "pointer"
+          }
+        ], 
+        [
+          "read", 
+          {
+            "to": {
+              "argtypes": [
+                "RWops_t**", 
+                "void*", 
+                "size_t", 
+                "size_t"
+              ], 
+              "restype": "size_t", 
+              "type": "cfunc", 
+              "vararg": false
+            }, 
+            "type": "pointer"
+          }
+        ], 
+        [
+          "write", 
+          {
+            "to": {
+              "argtypes": [
+                "RWops_t**", 
+                "void*", 
+                "size_t", 
+                "size_t"
+              ], 
+              "restype": "size_t", 
+              "type": "cfunc", 
+              "vararg": false
+            }, 
+            "type": "pointer"
+          }
+        ], 
+        [
+          "close", 
+          {
+            "to": {
+              "argtypes": [
+                "RWops_t**"
+              ], 
+              "restype": "int", 
+              "type": "cfunc", 
+              "vararg": false
+            }, 
+            "type": "pointer"
+          }
+        ], 
+        [
+          "type", 
+          "uint"
+        ], 
+        [
+          "hidden", 
+          {
+            "fields": [
+              [
+                "stdio", 
+                {
+                  "fields": [
+                    [
+                      "autoclose", 
+                      "int"
+                    ], 
+                    [
+                      "fp", 
+                      "FILE*"
+                    ]
+                  ], 
+                  "type": "struct"
+                }
+              ], 
+              [
+                "mem", 
+                {
+                  "fields": [
+                    [
+                      "base", 
+                      "ubyte*"
+                    ], 
+                    [
+                      "here", 
+                      "ubyte*"
+                    ], 
+                    [
+                      "stop", 
+                      "ubyte*"
+                    ]
+                  ], 
+                  "type": "struct"
+                }
+              ], 
+              [
+                "unknown", 
+                {
+                  "fields": [
+                    [
+                      "data1", 
+                      "void*"
+                    ], 
+                    [
+                      "data2", 
+                      "void*"
+                    ]
+                  ], 
+                  "type": "struct"
+                }
+              ]
+            ], 
+            "type": "union"
+          }
+        ]
+      ], 
+      "type": "struct"
+    }, 
     "Rect": {
       "fields": [
         [
@@ -2425,7 +2710,40 @@
       ], 
       "type": "struct"
     }, 
-    "assert_data": "assert_data", 
+    "assert_data": "assert_data_t", 
+    "assert_data_t": {
+      "fields": [
+        [
+          "always_ignore", 
+          "int"
+        ], 
+        [
+          "trigger_count", 
+          "uint"
+        ], 
+        [
+          "condition", 
+          "ubyte*"
+        ], 
+        [
+          "filename", 
+          "ubyte*"
+        ], 
+        [
+          "linenum", 
+          "int"
+        ], 
+        [
+          "function", 
+          "ubyte*"
+        ], 
+        [
+          "next", 
+          "assert_data_t**"
+        ]
+      ], 
+      "type": "struct"
+    }, 
     "cond": {
       "type": "opaque"
     }, 

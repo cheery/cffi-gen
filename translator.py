@@ -98,7 +98,9 @@ class Translator(object):
                         if typedecl is None:
                             assert False, typename # hmm...
                         name = self.rename(typename)
-                        self.types[name] = self.typedecl(typedecl)
+                        ctype = self.typedecl(typedecl)
+                        assert name not in self.types, name
+                        self.types[name] = ctype
                         return name
                     return self.rename(typename)
         raise Exception("Translator for specifier not implemented: %r" % declarator.specifiers)
