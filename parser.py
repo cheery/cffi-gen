@@ -437,6 +437,13 @@ def on_struct_declaration(lineno, env, specifier, declarators, sm):
         declarator.qualifiers = specifier.qualifiers
     return declarators
 
+@rule('struct_declaration = specifier_qualifier_list SEMICOLON')
+def on_c99_anonymous_qualifier(lineno, env, specifier, sm):
+    declarator = Declarator(None)
+    declarator.specifiers = specifier.specifiers
+    declarator.qualifiers = specifier.qualifiers
+    return [declarator]
+
 @rule('struct_declarator = declarator')
 def on_blank_struct_declarator(lineno, env, declarator):
     return declarator

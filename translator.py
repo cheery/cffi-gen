@@ -52,6 +52,8 @@ class Translator(object):
     def declarator_chain(self, declarator, typespec):
         for which, params in reversed(declarator):
             if which == 'function':
+                if params is None:
+                    params = []
                 argtypes = [self.declarator(param) for param in params if param != Ellipsis]
                 if argtypes == ['void']:
                     argtypes = []

@@ -1,0 +1,373 @@
+{
+  "constants": {
+    "EFFECT_CONSTANT": 2, 
+    "EFFECT_COUNT": 8, 
+    "EFFECT_DAMPER": 5, 
+    "EFFECT_FRICTION": 4, 
+    "EFFECT_INERTIA": 6, 
+    "EFFECT_PERIODIC": 1, 
+    "EFFECT_RAMP": 7, 
+    "EFFECT_RUMBLE": 0, 
+    "EFFECT_SPRING": 3, 
+    "PERIODIC_COUNT": 6, 
+    "PERIODIC_CUSTOM": 5, 
+    "PERIODIC_SAW_DOWN": 4, 
+    "PERIODIC_SAW_UP": 3, 
+    "PERIODIC_SINE": 2, 
+    "PERIODIC_SQUARE": 0, 
+    "PERIODIC_TRIANGLE": 1
+  }, 
+  "types": {
+    "Device": {
+      "type": "opaque"
+    }, 
+    "Effect": {
+      "fields": [
+        [
+          "type", 
+          "int"
+        ], 
+        [
+          "id", 
+          "int"
+        ], 
+        [
+          "direction", 
+          "int"
+        ], 
+        [
+          "length", 
+          "int"
+        ], 
+        [
+          "delay", 
+          "int"
+        ], 
+        [
+          null, 
+          {
+            "fields": [
+              [
+                "rumble", 
+                "EffectRumble"
+              ], 
+              [
+                "periodic", 
+                "EffectPeriodic"
+              ]
+            ], 
+            "type": "union"
+          }
+        ]
+      ], 
+      "type": "struct"
+    }, 
+    "EffectPeriodic": {
+      "fields": [
+        [
+          "waveform", 
+          "int"
+        ], 
+        [
+          "period", 
+          "int"
+        ], 
+        [
+          "magnitude", 
+          "int"
+        ], 
+        [
+          "offset", 
+          "int"
+        ], 
+        [
+          "phase", 
+          "int"
+        ], 
+        [
+          "envelope", 
+          "Envelope"
+        ]
+      ], 
+      "type": "struct"
+    }, 
+    "EffectRumble": {
+      "fields": [
+        [
+          "strongMagnitude", 
+          "int"
+        ], 
+        [
+          "weakMagnitude", 
+          "int"
+        ]
+      ], 
+      "type": "struct"
+    }, 
+    "Envelope": {
+      "fields": [
+        [
+          "attackLength", 
+          "int"
+        ], 
+        [
+          "attackLevel", 
+          "int"
+        ], 
+        [
+          "fadeLength", 
+          "int"
+        ], 
+        [
+          "fadeLevel", 
+          "int"
+        ]
+      ], 
+      "type": "struct"
+    }
+  }, 
+  "variables": {
+    "Close": {
+      "name": "Shake_Close", 
+      "type": {
+        "argtypes": [
+          "Device*"
+        ], 
+        "restype": "void", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "EffectCapacity": {
+      "name": "Shake_EffectCapacity", 
+      "type": {
+        "argtypes": [
+          "Device*"
+        ], 
+        "restype": "int", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "EraseEffect": {
+      "name": "Shake_EraseEffect", 
+      "type": {
+        "argtypes": [
+          "Device*", 
+          "int"
+        ], 
+        "restype": "void", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "GetId": {
+      "name": "Shake_GetId", 
+      "type": {
+        "argtypes": [
+          "Device*"
+        ], 
+        "restype": "int", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "GetName": {
+      "name": "Shake_GetName", 
+      "type": {
+        "argtypes": [
+          "Device*"
+        ], 
+        "restype": "ubyte*", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "Init": {
+      "name": "Shake_Init", 
+      "type": {
+        "argtypes": [], 
+        "restype": "int", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "InitEffect": {
+      "name": "Shake_InitEffect", 
+      "type": {
+        "argtypes": [
+          "Effect*", 
+          "int"
+        ], 
+        "restype": "void", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "NumOfDevices": {
+      "name": "Shake_NumOfDevices", 
+      "type": {
+        "argtypes": [], 
+        "restype": "int", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "Open": {
+      "name": "Shake_Open", 
+      "type": {
+        "argtypes": [
+          "uint"
+        ], 
+        "restype": "Device*", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "Play": {
+      "name": "Shake_Play", 
+      "type": {
+        "argtypes": [
+          "Device*", 
+          "int"
+        ], 
+        "restype": "void", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "QueryAutocenterSupport": {
+      "name": "Shake_QueryAutocenterSupport", 
+      "type": {
+        "argtypes": [
+          "Device*"
+        ], 
+        "restype": "int", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "QueryEffectSupport": {
+      "name": "Shake_QueryEffectSupport", 
+      "type": {
+        "argtypes": [
+          "Device*", 
+          "int"
+        ], 
+        "restype": "int", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "QueryGainSupport": {
+      "name": "Shake_QueryGainSupport", 
+      "type": {
+        "argtypes": [
+          "Device*"
+        ], 
+        "restype": "int", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "QueryWaveformSupport": {
+      "name": "Shake_QueryWaveformSupport", 
+      "type": {
+        "argtypes": [
+          "Device*", 
+          "int"
+        ], 
+        "restype": "int", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "Quit": {
+      "name": "Shake_Quit", 
+      "type": {
+        "argtypes": [], 
+        "restype": "void", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "SetAutocenter": {
+      "name": "Shake_SetAutocenter", 
+      "type": {
+        "argtypes": [
+          "Device*", 
+          "int"
+        ], 
+        "restype": "void", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "SetGain": {
+      "name": "Shake_SetGain", 
+      "type": {
+        "argtypes": [
+          "Device*", 
+          "int"
+        ], 
+        "restype": "void", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "SimplePeriodic": {
+      "name": "Shake_SimplePeriodic", 
+      "type": {
+        "argtypes": [
+          "Effect*", 
+          "int", 
+          "float", 
+          "float", 
+          "float", 
+          "float"
+        ], 
+        "restype": "void", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "SimpleRumble": {
+      "name": "Shake_SimpleRumble", 
+      "type": {
+        "argtypes": [
+          "Effect*", 
+          "float", 
+          "float", 
+          "float"
+        ], 
+        "restype": "void", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "Stop": {
+      "name": "Shake_Stop", 
+      "type": {
+        "argtypes": [
+          "Device*", 
+          "int"
+        ], 
+        "restype": "void", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "UploadEffect": {
+      "name": "Shake_UploadEffect", 
+      "type": {
+        "argtypes": [
+          "Device*", 
+          "Effect*"
+        ], 
+        "restype": "int", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }
+  }
+}
