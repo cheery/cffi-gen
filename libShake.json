@@ -9,6 +9,9 @@
     "EFFECT_RAMP": 7, 
     "EFFECT_RUMBLE": 0, 
     "EFFECT_SPRING": 3, 
+    "MAJOR_VERSION": 0, 
+    "MINOR_VERSION": 1, 
+    "PATCH_VERSION": 0, 
     "PERIODIC_COUNT": 6, 
     "PERIODIC_CUSTOM": 5, 
     "PERIODIC_SAW_DOWN": 4, 
@@ -54,10 +57,31 @@
               [
                 "periodic", 
                 "EffectPeriodic"
+              ], 
+              [
+                "constant", 
+                "EffectConstant"
+              ], 
+              [
+                "ramp", 
+                "EffectRamp"
               ]
             ], 
             "type": "union"
           }
+        ]
+      ], 
+      "type": "struct"
+    }, 
+    "EffectConstant": {
+      "fields": [
+        [
+          "level", 
+          "int"
+        ], 
+        [
+          "envelope", 
+          "Envelope"
         ]
       ], 
       "type": "struct"
@@ -82,6 +106,23 @@
         ], 
         [
           "phase", 
+          "int"
+        ], 
+        [
+          "envelope", 
+          "Envelope"
+        ]
+      ], 
+      "type": "struct"
+    }, 
+    "EffectRamp": {
+      "fields": [
+        [
+          "startLevel", 
+          "int"
+        ], 
+        [
+          "endLevel", 
           "int"
         ], 
         [
@@ -138,13 +179,35 @@
         "vararg": false
       }
     }, 
-    "EffectCapacity": {
-      "name": "Shake_EffectCapacity", 
+    "DeviceEffectCapacity": {
+      "name": "Shake_DeviceEffectCapacity", 
       "type": {
         "argtypes": [
           "Device*"
         ], 
         "restype": "int", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "DeviceId": {
+      "name": "Shake_DeviceId", 
+      "type": {
+        "argtypes": [
+          "Device*"
+        ], 
+        "restype": "int", 
+        "type": "cfunc", 
+        "vararg": false
+      }
+    }, 
+    "DeviceName": {
+      "name": "Shake_DeviceName", 
+      "type": {
+        "argtypes": [
+          "Device*"
+        ], 
+        "restype": "ubyte*", 
         "type": "cfunc", 
         "vararg": false
       }
@@ -157,28 +220,6 @@
           "int"
         ], 
         "restype": "void", 
-        "type": "cfunc", 
-        "vararg": false
-      }
-    }, 
-    "GetId": {
-      "name": "Shake_GetId", 
-      "type": {
-        "argtypes": [
-          "Device*"
-        ], 
-        "restype": "int", 
-        "type": "cfunc", 
-        "vararg": false
-      }
-    }, 
-    "GetName": {
-      "name": "Shake_GetName", 
-      "type": {
-        "argtypes": [
-          "Device*"
-        ], 
-        "restype": "ubyte*", 
         "type": "cfunc", 
         "vararg": false
       }
