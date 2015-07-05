@@ -168,7 +168,7 @@
     }
   }, 
   "variables": {
-    "Close": {
+    "close": {
       "name": "Shake_Close", 
       "type": {
         "argtypes": [
@@ -179,7 +179,7 @@
         "vararg": false
       }
     }, 
-    "DeviceEffectCapacity": {
+    "deviceEffectCapacity": {
       "name": "Shake_DeviceEffectCapacity", 
       "type": {
         "argtypes": [
@@ -190,7 +190,7 @@
         "vararg": false
       }
     }, 
-    "DeviceId": {
+    "deviceId": {
       "name": "Shake_DeviceId", 
       "type": {
         "argtypes": [
@@ -201,7 +201,7 @@
         "vararg": false
       }
     }, 
-    "DeviceName": {
+    "deviceName": {
       "name": "Shake_DeviceName", 
       "type": {
         "argtypes": [
@@ -212,7 +212,7 @@
         "vararg": false
       }
     }, 
-    "EraseEffect": {
+    "eraseEffect": {
       "name": "Shake_EraseEffect", 
       "type": {
         "argtypes": [
@@ -224,7 +224,7 @@
         "vararg": false
       }
     }, 
-    "Init": {
+    "init": {
       "name": "Shake_Init", 
       "type": {
         "argtypes": [], 
@@ -233,7 +233,7 @@
         "vararg": false
       }
     }, 
-    "InitEffect": {
+    "initEffect": {
       "name": "Shake_InitEffect", 
       "type": {
         "argtypes": [
@@ -245,7 +245,7 @@
         "vararg": false
       }
     }, 
-    "NumOfDevices": {
+    "numOfDevices": {
       "name": "Shake_NumOfDevices", 
       "type": {
         "argtypes": [], 
@@ -254,7 +254,7 @@
         "vararg": false
       }
     }, 
-    "Open": {
+    "open": {
       "name": "Shake_Open", 
       "type": {
         "argtypes": [
@@ -265,7 +265,7 @@
         "vararg": false
       }
     }, 
-    "Play": {
+    "play": {
       "name": "Shake_Play", 
       "type": {
         "argtypes": [
@@ -277,7 +277,7 @@
         "vararg": false
       }
     }, 
-    "QueryAutocenterSupport": {
+    "queryAutocenterSupport": {
       "name": "Shake_QueryAutocenterSupport", 
       "type": {
         "argtypes": [
@@ -288,7 +288,7 @@
         "vararg": false
       }
     }, 
-    "QueryEffectSupport": {
+    "queryEffectSupport": {
       "name": "Shake_QueryEffectSupport", 
       "type": {
         "argtypes": [
@@ -300,7 +300,7 @@
         "vararg": false
       }
     }, 
-    "QueryGainSupport": {
+    "queryGainSupport": {
       "name": "Shake_QueryGainSupport", 
       "type": {
         "argtypes": [
@@ -311,7 +311,7 @@
         "vararg": false
       }
     }, 
-    "QueryWaveformSupport": {
+    "queryWaveformSupport": {
       "name": "Shake_QueryWaveformSupport", 
       "type": {
         "argtypes": [
@@ -323,7 +323,7 @@
         "vararg": false
       }
     }, 
-    "Quit": {
+    "quit": {
       "name": "Shake_Quit", 
       "type": {
         "argtypes": [], 
@@ -332,7 +332,7 @@
         "vararg": false
       }
     }, 
-    "SetAutocenter": {
+    "setAutocenter": {
       "name": "Shake_SetAutocenter", 
       "type": {
         "argtypes": [
@@ -344,7 +344,7 @@
         "vararg": false
       }
     }, 
-    "SetGain": {
+    "setGain": {
       "name": "Shake_SetGain", 
       "type": {
         "argtypes": [
@@ -356,7 +356,7 @@
         "vararg": false
       }
     }, 
-    "SimplePeriodic": {
+    "simplePeriodic": {
       "name": "Shake_SimplePeriodic", 
       "type": {
         "argtypes": [
@@ -372,7 +372,7 @@
         "vararg": false
       }
     }, 
-    "SimpleRumble": {
+    "simpleRumble": {
       "name": "Shake_SimpleRumble", 
       "type": {
         "argtypes": [
@@ -386,7 +386,7 @@
         "vararg": false
       }
     }, 
-    "Stop": {
+    "stop": {
       "name": "Shake_Stop", 
       "type": {
         "argtypes": [
@@ -398,7 +398,7 @@
         "vararg": false
       }
     }, 
-    "UploadEffect": {
+    "uploadEffect": {
       "name": "Shake_UploadEffect", 
       "type": {
         "argtypes": [

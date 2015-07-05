@@ -22,6 +22,9 @@ for cname in env.names:
     if re.match(r'^Shake_\w', cname):
         typespec = translate.declarator(env.names[cname])
         name = re.sub(r"^Shake_", r"", cname)
+        name = re.sub(r"^[A-Z][a-z]", lambda pat: pat.group(0).lower(), name)
+        if name[:1].upper() and not name[:2].upper():
+            name = name[:1].lower() + name[1:]
         variables[name] = {'name':cname, 'type':typespec}
 
 print json.dumps({
