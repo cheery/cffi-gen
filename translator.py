@@ -29,9 +29,10 @@ gcc_primitive_types = {
 }
 
 class Translator(object):
-    def __init__(self, env, rename_type):
+    def __init__(self, env, rename_type, dependency=(lambda name: None)):
         self.env = env
         self.rename_type = rename_type
+        self.dependency = dependency
         self.alias = {} # Maps c names to translated names.
         self.renamings = {} # umm...
         self.types = {}
@@ -96,6 +97,9 @@ class Translator(object):
                     self.alias[typedecl] = aliased
                     return aliased
                 else:
+                    dependency = self.dependency(typename)
+                    if dependency is not None:
+                        return dependency
                     if self.visit(typename):
                         if typedecl is None:
                             assert False, typename # hmm...
