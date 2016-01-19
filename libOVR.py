@@ -25,6 +25,10 @@ for name, value in env.constants.iteritems():
         if isinstance(value, (int, str)):
             name = re.sub(r"^OVR_", r"", name)
             constants[name] = value
+    if re.match(r'^ovr\w', name):
+        if isinstance(value, (int, str)):
+            name = re.sub(r"^ovr", r"", name)
+            constants[name] = value
 
 for cname in env.names:
     if re.match(r'^ovr_\w', cname):
