@@ -8,6 +8,8 @@ primitive_types = {
     'short':              "short",
     'unsigned short':     "ushort",
     'int':                "int",
+    'signed':             "int",
+    'unsigned':           "uint",
     'unsigned int':       "uint",
     'signed int':         "int",
     'long':               "long",

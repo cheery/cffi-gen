@@ -104,6 +104,17 @@ class BinOp(Unresolved):
             return self
         return operator_table[self.op](lhs, rhs)
 
+class Comparison(Unresolved):
+    def __init__(self, cond, yes, no):
+        self.cond = cond
+        self.yes = yes
+        self.no = no
+
+class Unary(Unresolved):
+    def __init__(self, which, rhs):
+        self.which = which
+        self.rhs = rhs
+
 rules = []
 labelled_rules = {}
 
@@ -390,6 +401,14 @@ def on_attribute_specifier(lineno, env, at, lp1, lp2, attributes, rp1, rp2):
 def on_attribute_term(lineno, env, stuff):
     return stuff
 
+@rule('attribute = LEFT_PAREN attribute RIGHT_PAREN')
+def on_attribute_extra_parens(lineno, env, lhs, attr, rhs):
+    return attr
+
+@rule('attribute = attribute SLASH INTCONSTANT')
+def on_attribute_slash(lineno, env, lhs, slash, rhs):
+    return ['slash', lhs, rhs]
+
 @rule('attribute = STRING STRING')
 def on_attribute_string_pair(lineno, env, lhs, rhs):
     return ['pair', lhs, rhs]
@@ -423,6 +442,11 @@ def on_struct_or_union_specifier(lineno, env, which, name, lb=None, block=None, 
 @rule('struct_identifier = IDENTIFIER')
 @rule('struct_identifier = TYPE_NAME')
 def on_struct_identifier(lineno, env, name):
+    return name
+
+@rule('struct_identifier = attribute_specifier IDENTIFIER')
+@rule('struct_identifier = attribute_specifier TYPE_NAME')
+def on_struct_identifier_with_attribute(lineno, env, _, name):
     return name
 
 @rule('struct_or_union = STRUCT')
@@ -518,6 +542,8 @@ def on_ignore_it_all(lineno, env, *ignore):
 
 @rule('constant_expression = constant_comparison QUESTION constant_comparison COLON constant_comparison')
 def on_const_comparison(lineno, env, cond, q, tru, c, fal):
+    if isinstance(cond, BinOp):
+        return Comparison(cond, tru, fal)
     return [tru, fal][cond]
 
 @rule('constant_expression = constant_bitor')
@@ -532,7 +558,9 @@ def on_const_expression(lineno, env, value):
 @rule('constant_bitor = constant_bitor VERTICAL_BAR constant_comparison')
 @rule('constant_comparison = constant_comparison LEFT_ANGLE constant_shift')
 @rule('constant_comparison = constant_comparison RIGHT_ANGLE constant_shift')
+@rule('constant_comparison = constant_comparison GE_OP constant_shift')
 @rule('constant_comparison = constant_comparison EQ_OP constant_shift')
+@rule('constant_comparison = constant_comparison NE_OP constant_shift')
 @rule('constant_shift = constant_shift LEFT_OP constant_plusminus')
 @rule('constant_shift = constant_shift RIGHT_OP constant_plusminus')
 @rule('constant_plusminus = constant_plusminus PLUS constant_divmul')
@@ -548,6 +576,8 @@ def on_const_binop(lineno, env, lhs, op, rhs):
 operator_table = {
     '|':operator.or_,
     '==':operator.eq,
+    '!=':operator.ne,
+    '>=':operator.ge,
     '<<':operator.lshift,
     '>>':operator.rshift,
     '<':operator.lt,
@@ -570,10 +600,14 @@ def on_minus_prefix(lineno, env, value):
 
 @rule('constant_term = PLUS constant_term')
 def on_plus_prefix(lineno, env, dash, value):
+    if isinstance(value, Unresolved):
+        return Unary(dash, value)
     return +value
 
 @rule('constant_term = DASH constant_term')
 def on_minus_prefix(lineno, env, dash, value):
+    if isinstance(value, Unresolved):
+        return Unary(dash, value)
     return -value
 
 @rule('constant_term = LEFT_PAREN constant_expression RIGHT_PAREN')
@@ -884,11 +918,11 @@ def default_env():
     })
     return env
 
-def parse(env, includes, lce=5):
+def parse(env, includes, lce=5, extra_flags=()):
     includes = list(includes)
     parser = Parser(translation_unit.table, env)
 
-    headers = check_output(['gcc', '-E'] + includes)
+    headers = check_output(['gcc', '-E'] + includes + list(extra_flags))
     token_stream = tokenize(headers)
     try:
         for lineno, group, value in token_stream:
@@ -900,7 +934,7 @@ def parse(env, includes, lce=5):
         supply_snerror_extra(error, headers, lce)
         raise
 
-    macros = check_output(['gcc', '-dM', '-E'] + includes)
+    macros = check_output(['gcc', '-dM', '-E'] + includes + list(extra_flags))
     for line in [macro.strip() for macro in macros.split('#define')]:
         if line == "":
             continue
