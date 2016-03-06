@@ -5,7 +5,7 @@ def rename_type(name):
     return re.sub(r"^SDL_", r"", name)
 
 env = parser.default_env()
-parser.parse(env, ['/usr/include/SDL2/SDL.h'])
+parser.parse(env, ['libSDL2.h'])
 translate = Translator(env, rename_type)
 translate.blacklist.update([
     '_IO_marker',

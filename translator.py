@@ -91,29 +91,32 @@ class Translator(object):
             elif isinstance(typename, parser.Enum):
                 return self.declarator_chain(declarator, 'int')
             elif isinstance(typename, str):
-                typedecl = self.env.types[typename]
-                if typedecl in self.alias:
-                    return self.alias[typedecl]
-                aliased = unroll_typedef(self.env, typedecl)
-                if isinstance(aliased, str):
-                    self.alias[typedecl] = aliased
-                    return aliased
-                else:
-                    dependency = self.dependency(typename)
-                    if dependency is not None:
-                        return dependency
-                    if self.visit(typename):
-                        if typedecl is None:
-                            assert False, typename # hmm...
-                        name = self.rename(typename)
-                        ctype = self.typedecl(typedecl)
-                        if ctype == name: # For the interesting case of:
-                            return name   # typedef struct name name;
-                        assert name not in self.types, name
-                        self.types[name] = ctype
-                        return name
-                    return self.rename(typename)
+                return self.visit_type(typename)
         raise Exception("Translator for specifier not implemented: %r" % declarator.specifiers)
+
+    def visit_type(self, typename):
+        typedecl = self.env.types[typename]
+        if typedecl in self.alias:
+            return self.alias[typedecl]
+        aliased = unroll_typedef(self.env, typedecl)
+        if isinstance(aliased, str):
+            self.alias[typedecl] = aliased
+            return aliased
+        else:
+            dependency = self.dependency(typename)
+            if dependency is not None:
+                return dependency
+            if self.visit(typename):
+                if typedecl is None:
+                    assert False, typename # hmm...
+                name = self.rename(typename)
+                ctype = self.typedecl(typedecl)
+                if ctype == name: # For the interesting case of:
+                    return name   # typedef struct name name;
+                assert name not in self.types, name
+                self.types[name] = ctype
+                return name
+            return self.rename(typename)
 
     def typedecl(self, typedecl):
         if typedecl is None:

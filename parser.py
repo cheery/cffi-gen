@@ -398,6 +398,7 @@ def on_attribute_specifier(lineno, env, at, lp1, lp2, attributes, rp1, rp2):
 @rule('attribute = STRING')
 @rule('attribute = IDENTIFIER')
 @rule('attribute = INTCONSTANT')
+@rule('attribute = declaration_specifiers')
 def on_attribute_term(lineno, env, stuff):
     return stuff
 
@@ -456,6 +457,13 @@ def on_struct_or_union(lineno, env, which):
 
 @rule('struct_declaration = specifier_qualifier_list struct_declarator_list SEMICOLON')
 def on_struct_declaration(lineno, env, specifier, declarators, sm):
+    for declarator in declarators:
+        declarator.specifiers = specifier.specifiers
+        declarator.qualifiers = specifier.qualifiers
+    return declarators
+
+@rule('struct_declaration = specifier_qualifier_list struct_declarator_list attribute_specifier SEMICOLON')
+def on_struct_declaration(lineno, env, specifier, declarators, ass, sm):
     for declarator in declarators:
         declarator.specifiers = specifier.specifiers
         declarator.qualifiers = specifier.qualifiers
