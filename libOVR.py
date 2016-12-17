@@ -7,6 +7,7 @@ def rename_type(name):
 env = parser.default_env()
 parser.parse(env, ['libOVR.h'],
     extra_flags=[
+        "-m32", # Drop if you want 64-bit headers.
         "-I./OculusSDK/LibOVR/Include",
     ])
 translate = Translator(env, rename_type)
@@ -29,6 +30,12 @@ for name, value in env.constants.iteritems():
         if isinstance(value, (int, str)):
             name = re.sub(r"^ovr", r"", name)
             constants[name] = value
+
+for cname in env.types:
+    if re.match(r'^ovrLayer_U\w', cname):
+        translate.visit_type(cname)
+    if re.match(r'^ovrGLTexture$', cname):
+        translate.visit_type(cname)
 
 for cname in env.names:
     if re.match(r'^ovr_\w', cname):
