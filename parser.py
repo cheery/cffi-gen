@@ -402,6 +402,10 @@ def on_attribute_specifier(lineno, env, at, lp1, lp2, attributes, rp1, rp2):
 def on_attribute_term(lineno, env, stuff):
     return stuff
 
+@rule('attribute = INTCONSTANT PLUS INTCONSTANT')
+def on_attribute_plus(lineno, env, lhs, plus, rhs):
+    return (plus, lhs, rhs)
+
 @rule('attribute = LEFT_PAREN attribute RIGHT_PAREN')
 def on_attribute_extra_parens(lineno, env, lhs, attr, rhs):
     return attr

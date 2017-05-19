@@ -14,6 +14,7 @@ translate.blacklist.update([
 translate.bluelist.update({
     'SDL_AudioCVT': 'AudioCVT',
     'SDL_assert_data': 'assert_data',
+    'SDL_AssertData': 'AssertData',
     'SDL_PixelFormat': 'PixelFormat',
     'SDL_RWops': 'RWops',
 })
