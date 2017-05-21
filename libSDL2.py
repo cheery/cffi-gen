@@ -35,6 +35,7 @@ for cname in env.names:
         variables[name] = {'name':cname, 'type':typespec}
 
 print json.dumps({
+    'comment': "Generated with https://github.com/cheery/cffi-gen",
     'constants': constants,
     'types': translate.types,
     'variables': variables}, indent=2, sort_keys=True)
