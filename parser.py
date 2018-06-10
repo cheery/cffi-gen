@@ -884,7 +884,8 @@ class Parser(object):
 
     def step(self, lineno, group, value):
         if group == 'IDENTIFIER' and value in self.env.types:
-            group = 'TYPE_NAME'
+            if 'TYPE_NAME' in self.table[self.state]:
+                group = 'TYPE_NAME'
         action = self.table[self.state].get(group, self.table[self.state].get('*'))
         while isinstance(action, Rule):
             values = []
@@ -897,7 +898,8 @@ class Parser(object):
             self.state = self.table[self.state][action.lhs]
 
             if group == 'IDENTIFIER' and value in self.env.types:
-                group = 'TYPE_NAME'
+                if 'TYPE_NAME' in self.table[self.state]:
+                    group = 'TYPE_NAME'
             action = self.table[self.state].get(group, self.table[self.state].get('*'))
         if action is None:
             error = "%i: got %s, but expected %s: %s" % (lineno, group, ', '.join(map(str, self.table[self.state])), value)
